@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var displayed: Mark?
     private let runtime = LocalRuntime()
     private var analysisTask: Task<Void, Never>?
+    private var currentEdits: [TextEdit] = []
     private var analyzedText: String?
     private var demoStatus: NSTextField?
     private var rewriteTask: Task<Void, Never>?
@@ -147,7 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func quit() { NSApp.terminate(nil) }
     @objc func modelHelp() {
         let alert = NSAlert(); alert.messageText = "Local sentence rewrites"
-        alert.informativeText = "Install Ollama from ollama.com, then run:\n\nollama pull qwen3:4b\n\nKeep Ollama running. LocalWriter connects only to 127.0.0.1:11434. Spelling works without a model. The repository includes scripts/setup-model.sh."
+        alert.informativeText = "Install Ollama from ollama.com, then run:\n\nollama pull qwen3:4b\n\nKeep Ollama running. LocalWriter connects only to 127.0.0.1:11434. Spelling, grammar, and rewrites all use the local model. The repository includes scripts/setup-model.sh."
         alert.runModal()
     }
     @objc func demo() {
@@ -177,7 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         clear(); NSApp.activate(ignoringOtherApps: true); demoWindow?.makeKeyAndOrderFront(nil)
     }
     func clear() {
-        analysisTask?.cancel(); analysisTask = nil; analyzedText = nil
+        analysisTask?.cancel(); analysisTask = nil; analyzedText = nil; currentEdits = []
         rewriteTask?.cancel(); rewriteTask = nil
         snapshot = nil; marks = []; hovered = nil; displayed = nil; pendingText = ""; overlay.hide()
     }
@@ -196,10 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if analyzedText != current.text && analysisTask == nil {
             analyze(current)
         } else if Date().timeIntervalSince(lastGeometryUpdate) > 0.5 {
-            let updated = marks.compactMap { mark -> Mark? in
-                guard let rect = bridge.bounds(mark.range, in: current) else { return nil }
-                return Mark(range: mark.range, rect: rect, word: mark.word, suggestions: mark.suggestions, sentence: mark.sentence)
-            }
+            let updated = makeMarks(for: current)
             if updated.map(\.rect) != marks.map(\.rect) { overlay.popover.orderOut(nil); displayed = nil }
             marks = updated; overlay.draw(marks); lastGeometryUpdate = Date()
         }
@@ -219,6 +217,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             rewriteTask?.cancel(); displayed = mark; overlay.show(mark: mark)
         }
     }
+    private func makeMarks(for editor: EditorSnapshot) -> [Mark] {
+        var result: [Mark] = []
+        for edit in currentEdits {
+            for wordRange in HighlightRanges.words(in: edit.range, text: editor.text) {
+                if let rect = bridge.bounds(wordRange, in: editor) {
+                    result.append(Mark(range: edit.range, rect: rect, word: edit.original, suggestions: [edit.replacement], sentence: false, displayRange: wordRange))
+                }
+            }
+        }
+        for range in SentenceRanges.inText(editor.text).prefix(80) where range.length <= 1000 {
+            for wordRange in HighlightRanges.words(in: range, text: editor.text) {
+                if let rect = bridge.bounds(wordRange, in: editor) {
+                    result.append(Mark(range: range, rect: rect, word: (editor.text as NSString).substring(with: range), suggestions: [], sentence: true, displayRange: wordRange))
+                }
+            }
+        }
+        return result
+    }
     func analyze(_ editor: EditorSnapshot) {
         snapshot = editor; feedback = "Checking spelling and grammar with Qwen3…"
         analyzedText = editor.text
@@ -227,17 +243,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let edits = try await LocalModel().analyze(editor.text)
                 guard !Task.isCancelled, let self, let current = self.snapshot,
                       current.sameEditor(as: editor), current.text == editor.text else { return }
-                self.marks = edits.compactMap { edit in
-                    guard let rect = self.bridge.bounds(edit.range, in: current) else { return nil }
-                    return Mark(range: edit.range, rect: rect, word: edit.original, suggestions: [edit.replacement], sentence: false)
-                }
-                for range in SentenceRanges.inText(editor.text).prefix(80) where range.length <= 1000 {
-                    if let rect = self.bridge.bounds(range, in: current), rect.height < 40 {
-                        self.marks.append(Mark(range: range, rect: rect, word: (editor.text as NSString).substring(with: range), suggestions: [], sentence: true))
-                    }
-                }
+                self.currentEdits = edits
+                self.marks = self.makeMarks(for: current)
                 self.overlay.draw(self.marks); self.lastGeometryUpdate = Date()
-                let visible = self.marks.filter { !$0.sentence }.count
+                let visible = Set(self.marks.filter { !$0.sentence }.map { $0.range }).count
                 self.feedback = edits.isEmpty ? "Qwen3 · No issues found" : visible == 0 ? "Qwen3 found \(edits.count) issues · Editor does not expose word positions" : "Qwen3 · \(visible) corrections · Hover an underline"
                 self.analysisTask = nil
             } catch {
@@ -302,6 +311,43 @@ struct LocalWriterApp {
             }
             NSApplication.shared.run()
             return
+        }
+        if CommandLine.arguments.contains("--probe-editor") {
+            _ = NSApplication.shared
+            Task { @MainActor in
+                let bridge = AccessibilityBridge()
+                var target: NSRunningApplication?
+                if let i = CommandLine.arguments.firstIndex(of: "--app"), CommandLine.arguments.count > i + 1 {
+                    target = NSRunningApplication.runningApplications(withBundleIdentifier: CommandLine.arguments[i + 1]).first
+                    guard target != nil else { print("Requested test app is not running"); exit(1) }
+                }
+                var lines = [bridge.diagnosticSummary(app: target)]
+                let excluded = UserDefaults.standard.stringArray(forKey: "excludedApps") ?? []
+                lines.append("Excluded app IDs: \(excluded)")
+                if let editor = bridge.snapshot(app: target) {
+                    lines.append("Editor frame: \(editor.frame)")
+                    do {
+                        try await Task.sleep(nanoseconds: 800_000_000)
+                        let next = bridge.snapshot(app: target)
+                        lines.append("Stable editor: \(next.map { $0.sameEditor(as: editor) } ?? false), stable text: \(next?.text == editor.text)")
+                        let edits = try await LocalModel().analyze(editor.text)
+                        lines.append("Model issues: \(edits.count)")
+                        for edit in edits {
+                            lines.append("Issue range: \(edit.range), whitespace: \(edit.original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty), rect: \(String(describing: bridge.bounds(edit.range, in: editor)))")
+                        }
+                        for edit in edits { lines.append(bridge.rangeDiagnostic(edit.range, editor: editor)) }
+                        let sample = NSRange(location: 0, length: min(1, editor.text.utf16.count))
+                        lines.append(bridge.rangeDiagnostic(sample, editor: editor))
+                        lines.append("First character rect: \(String(describing: bridge.bounds(sample, in: editor)))")
+                    } catch { lines.append("Error: \(error.localizedDescription)") }
+                } else { lines.append("Snapshot failed: \(bridge.failure)") }
+                let report = lines.joined(separator: "\n")
+                if let i = CommandLine.arguments.firstIndex(of: "--report"), CommandLine.arguments.count > i + 1 {
+                    try? report.write(toFile: CommandLine.arguments[i + 1], atomically: true, encoding: .utf8)
+                }
+                print(report); exit(0)
+            }
+            NSApplication.shared.run(); return
         }
         if CommandLine.arguments.contains("--diagnose") {
             let report = AccessibilityBridge().diagnosticSummary()

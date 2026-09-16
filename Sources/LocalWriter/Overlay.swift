@@ -6,14 +6,16 @@ struct Mark {
     let word: String
     let suggestions: [String]
     let sentence: Bool
+    var displayRange: NSRange? = nil
 }
 
 @MainActor
 final class UnderlineView: NSView {
     var marks: [Mark] = []
+    var highlightedSentence: NSRange?
     override func draw(_ dirtyRect: NSRect) {
-        for mark in marks where !mark.sentence {
-            NSColor.systemRed.setStroke()
+        for mark in marks where !mark.sentence || mark.range == highlightedSentence {
+            (mark.sentence ? NSColor.systemBlue : NSColor.systemRed).setStroke()
             let path = NSBezierPath(); path.lineWidth = 1.5
             var x = mark.rect.minX
             path.move(to: CGPoint(x: x, y: mark.rect.minY + 1))
@@ -47,15 +49,18 @@ final class Overlay {
         popover.hidesOnDeactivate = false
     }
     func draw(_ marks: [Mark]) {
+        if !popover.isVisible { view.highlightedSentence = nil }
         guard !marks.isEmpty else { window.orderOut(nil); return }
         let union = NSScreen.screens.reduce(CGRect.null) { $0.union($1.frame) }
         window.setFrame(union, display: false)
         view.frame = CGRect(origin: .zero, size: union.size)
-        view.marks = marks.map { Mark(range: $0.range, rect: $0.rect.offsetBy(dx: -union.minX, dy: -union.minY), word: $0.word, suggestions: $0.suggestions, sentence: $0.sentence) }
+        view.marks = marks.map { Mark(range: $0.range, rect: $0.rect.offsetBy(dx: -union.minX, dy: -union.minY), word: $0.word, suggestions: $0.suggestions, sentence: $0.sentence, displayRange: $0.displayRange) }
         view.needsDisplay = true; window.orderFrontRegardless()
     }
-    func hide() { window.orderOut(nil); popover.orderOut(nil) }
+    func hide() { view.highlightedSentence = nil; window.orderOut(nil); popover.orderOut(nil) }
     func show(mark: Mark, message: String? = nil, replacement: String? = nil) {
+        view.highlightedSentence = mark.sentence ? mark.range : nil
+        view.needsDisplay = true
         let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 9
         stack.edgeInsets = NSEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
         let title = NSTextField(labelWithString: mark.sentence ? "Improve sentence · On-device" : "Model correction · \(mark.word)")
@@ -98,5 +103,5 @@ final class Overlay {
     }
     @objc private func choose(_ sender: NSButton) { if let text = sender.identifier?.rawValue { action?(text) } }
     @objc private func rewrite() { rewriteAction?() }
-    @objc private func dismiss() { popover.orderOut(nil); dismissAction?() }
+    @objc private func dismiss() { view.highlightedSentence = nil; view.needsDisplay = true; popover.orderOut(nil); dismissAction?() }
 }

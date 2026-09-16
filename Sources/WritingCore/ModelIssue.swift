@@ -31,7 +31,9 @@ public enum ModelEdits {
             var replacement = newTokens[startJ..<j].joined()
             // Attach insertions to a neighboring token so they have a visible underline.
             if start == end {
-                if startI < oldTokens.count {
+                if startI > 0, startI < oldTokens.count, oldTokens[startI].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    start = oldRanges[startI - 1].location; replacement = oldTokens[startI - 1] + replacement
+                } else if startI < oldTokens.count {
                     end = NSMaxRange(oldRanges[startI]); replacement += oldTokens[startI]
                 } else if startI > 0 {
                     start = oldRanges[startI - 1].location; replacement = oldTokens[startI - 1] + replacement
@@ -40,7 +42,10 @@ public enum ModelEdits {
             let range = NSRange(location: start, length: end - start)
             let edit = TextEdit(range: range, original: old.substring(with: range), replacement: replacement)
             guard edit.applying(to: original, snapshot: original) != nil else { return [] }
-            edits.append(edit)
+            if !edit.original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+               !edit.replacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                edits.append(edit)
+            }
         }
         return edits
     }

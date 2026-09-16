@@ -33,13 +33,14 @@ struct LocalModel {
         return result
     }
     func analyze(_ text: String) async throws -> [TextEdit] {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         struct Result: Decodable { let corrected: String }
         let result = try await response(Result.self, text: text,
             instruction: "Fix spelling and grammatical errors in English text. Preserve all wording, meaning, names, tone and punctuation except where incorrect. Do not improve style or add commentary. Return JSON with the corrected text in corrected. If the text is correct, return it unchanged.",
             schema: ["type": "object", "properties": ["corrected": ["type": "string"]], "required": ["corrected"]])
         guard !result.corrected.isEmpty, result.corrected.utf16.count <= max(1000, text.utf16.count * 2) else { throw ModelError.invalidResponse }
         let edits = ModelEdits.difference(from: text, to: result.corrected)
-        guard text == result.corrected || !edits.isEmpty else { throw ModelError.invalidResponse }
+        guard text.split(whereSeparator: { $0.isWhitespace }) == result.corrected.split(whereSeparator: { $0.isWhitespace }) || !edits.isEmpty else { throw ModelError.invalidResponse }
         return edits
     }
     func rewrite(_ text: String) async throws -> String {

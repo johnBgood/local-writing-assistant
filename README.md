@@ -45,13 +45,17 @@ The server listens on `127.0.0.1:11434`. The bundled-runtime startup and start s
 
 After a typing pause, the model returns conservatively corrected text in structured JSON. The app computes word-level differences and UTF-16 ranges locally. Accepting a correction requires the original editor and entire draft to still match the analyzed snapshot. Typing cancels outdated requests. Password fields and excluded apps are skipped.
 
+Whitespace-only changes are ignored. Phrase corrections retain one replacement range while drawing separate underlines beneath their words, never across blank lines. Hovering a sentence highlights its words in blue and offers a meaning-preserving rewrite; accepting it replaces the complete sentence.
+
+Editor discovery uses shared accessibility roles and focused descendants, without app-specific editor branches. Ambiguous or incomplete container searches do not select an arbitrary editor.
+
 The practice editor applies edits through NSTextView with undo support. External editors use macOS Accessibility selected-text replacement without clipboard or keystroke fallbacks.
 
 ## Limits
 
-- Slack and Codex live compatibility still needs verification with Accessibility granted to the current build. Detection, word coordinates, and selected-text replacement depend on what each editor exposes.
+- Chrome's standard textarea has been verified with a live model correction and word coordinates. Slack and Codex live compatibility still needs verification. Detection, word coordinates, and selected-text replacement depend on what each editor exposes.
 - Missing permissions, unreadable fields, missing word coordinates, model failures, and disabled apps are reported in the menu instead of silently appearing to work.
-- External drafts are limited to 4,000 UTF-16 code units. Sentence hover currently supports single-line sentences; wrapped ranges need more work.
+- External drafts are limited to 4,000 UTF-16 code units. Sentence hover uses individual word positions across lines; editors must expose accurate range geometry.
 - Model suggestions are fallible and are applied only when explicitly accepted.
 - Google Docs canvas integration is not implemented.
 - No launch-at-login registration, installer, notarization, or automatic model-download UI yet.
@@ -72,5 +76,6 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 - `--check-editor`: real-model spelling and grammar, native word coordinates, overlay visibility, acceptance, and stale-edit rejection.
 - `--practice-check`: opens a synthetic practice draft and exercises the running background loop, checks rendered red underline pixels, and accepts a correction. Requires the local model server; closes the test app afterward.
 - **Editor Diagnostics…** reports Accessibility metadata without editor text. `--diagnose` also exposes this for development.
+- Use `open -n -g dist/LocalWriter.app --args --probe-editor --app com.google.Chrome --report /tmp/localwriter-probe.txt` for a targeted, text-free geometry/model diagnostic. LaunchServices preserves the app's Accessibility identity; a direct shell invocation may inherit different permission attribution.
 
 `WritingCore` owns edit validation, word differences, sentence ranges, and app availability state. `Accessibility.swift` adapts native and external editors. `Overlay.swift` draws underlines and suggestion panels. `App.swift` coordinates menus, debounce, hover, and asynchronous checks. `LocalModel.swift` owns model requests and the optional project-local runtime.

@@ -21,7 +21,7 @@ final class AccessibilityBridge {
     private var prepared: Set<pid_t> = []
 
     func practiceSnapshot() -> EditorSnapshot? {
-        guard let view = practiceEditor, let window = view.window, !view.string.isEmpty else { return nil }
+        guard let view = practiceEditor, let window = view.window, !view.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return EditorSnapshot(element: AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier),
                               pid: ProcessInfo.processInfo.processIdentifier, text: view.string,
                               frame: window.convertToScreen(view.convert(view.visibleRect, to: nil)), nativeView: view)
@@ -39,9 +39,9 @@ final class AccessibilityBridge {
         guard AXValueGetValue(p as! AXValue, .cgPoint, &point), AXValueGetValue(s as! AXValue, .cgSize, &size) else { return nil }
         return CGRect(origin: point, size: size)
     }
-    func diagnosticSummary() -> String {
+    func diagnosticSummary(app target: NSRunningApplication? = nil) -> String {
         var lines = ["Accessibility permission: \(AXIsProcessTrusted())"]
-        guard let app = NSWorkspace.shared.frontmostApplication else { return lines.joined(separator: "\n") }
+        guard let app = target ?? NSWorkspace.shared.frontmostApplication else { return lines.joined(separator: "\n") }
         lines.append("App: \(app.localizedName ?? "Unknown")")
         let root = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(root, 0.3)
@@ -59,13 +59,13 @@ final class AccessibilityBridge {
         }
         return lines.joined(separator: "\n")
     }
-    func snapshot() -> EditorSnapshot? {
-        if NSApp.isActive, let view = practiceEditor, view.window?.isKeyWindow == true {
+    func snapshot(app target: NSRunningApplication? = nil) -> EditorSnapshot? {
+        if target == nil, NSApp.isActive, let view = practiceEditor, view.window?.isKeyWindow == true {
             failure = view.string.isEmpty ? "Type in the practice editor" : ""
             return practiceSnapshot()
         }
         guard AXIsProcessTrusted() else { failure = "Accessibility access needed for other apps"; return nil }
-        guard let app = NSWorkspace.shared.frontmostApplication,
+        guard let app = target ?? NSWorkspace.shared.frontmostApplication,
               app.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
             failure = "Focus a text editor to begin"; return nil
         }
@@ -91,7 +91,7 @@ final class AccessibilityBridge {
                 guard let text = attribute(element, kAXValueAttribute) as? String else {
                     failure = "Editor does not expose readable text"; return nil
                 }
-                guard !text.isEmpty else { failure = "Type a sentence to begin"; return nil }
+                guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { failure = "Type a sentence to begin"; return nil }
                 guard text.utf16.count <= 4000 else { failure = "Draft too long · limit is 4,000 characters"; return nil }
                 guard let frame = rect(element), frame.width > 0, frame.height > 0 else {
                     failure = "Editor does not expose its position"; return nil
@@ -102,8 +102,32 @@ final class AccessibilityBridge {
             if let parent = attribute(element, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID() { candidate = (parent as! AXUIElement) }
             else { candidate = nil }
         }
+        let container = focus as! AXUIElement
+        let containerRole = attribute(container, kAXRoleAttribute) as? String ?? ""
+        if ["AXWebArea", "AXGroup"].contains(containerRole),
+           let editor = EditorSearch.resolve(root: container,
+               children: { self.attribute($0, kAXChildrenAttribute) as? [AXUIElement] ?? [] },
+               isEditor: { [kAXTextAreaRole, kAXTextFieldRole, "AXComboBox"].contains(self.attribute($0, kAXRoleAttribute) as? String ?? "") || (self.attribute($0, "AXEditable") as? Bool ?? false) },
+               isTextArea: { self.attribute($0, kAXRoleAttribute) as? String == kAXTextAreaRole },
+               isFocused: { self.attribute($0, kAXFocusedAttribute) as? Bool ?? false },
+               isSecure: { self.attribute($0, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole }),
+           let text = attribute(editor, kAXValueAttribute) as? String,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf16.count <= 4000,
+           let frame = rect(editor), !frame.isEmpty {
+            failure = ""
+            return EditorSnapshot(element: editor, pid: app.processIdentifier, text: text, frame: frame)
+        }
         failure = "Focused control is not an editable text field"
         return nil
+    }
+    func rangeDiagnostic(_ range: NSRange, editor: EditorSnapshot) -> String {
+        var cfRange = CFRange(location: range.location, length: range.length)
+        let input = AXValueCreate(.cfRange, &cfRange)!
+        var output: CFTypeRef?
+        let error = AXUIElementCopyParameterizedAttributeValue(editor.element, kAXBoundsForRangeParameterizedAttribute as CFString, input, &output)
+        var rect = CGRect.zero
+        if let output, CFGetTypeID(output) == AXValueGetTypeID() { AXValueGetValue(output as! AXValue, .cgRect, &rect) }
+        return "Range status: \(error.rawValue), raw rect: \(rect)"
     }
     func bounds(_ range: NSRange, in editor: EditorSnapshot) -> CGRect? {
         if let view = editor.nativeView {

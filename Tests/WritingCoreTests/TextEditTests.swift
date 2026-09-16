@@ -3,6 +3,29 @@ import WritingCore
 func XCTAssertEqual<T: Equatable>(_ lhs: T, _ rhs: T) { precondition(lhs == rhs, "Expected \(rhs), got \(lhs)") }
 func XCTAssertNil<T>(_ value: T?) { precondition(value == nil, "Expected nil") }
 final class TextEditTests {
+    func testHighlightRangesAndContainerFocus() {
+        let text = "Hello\n\nwrong words\n"
+        let ranges = HighlightRanges.words(in: NSRange(location: 0, length: text.utf16.count), text: text)
+        XCTAssertEqual(ranges.map { (text as NSString).substring(with: $0) }, ["Hello", "wrong", "words"])
+        XCTAssertEqual(HighlightRanges.words(in: NSRange(location: 5, length: 2), text: text), [])
+        struct Node { let id: Int; var children: [Node] = []; var editor = false; var focused = false; var secure = false }
+        func resolve(_ root: Node) -> Int? {
+            EditorSearch.resolve(root: root, children: { $0.children }, isEditor: { $0.editor }, isTextArea: { $0.editor }, isFocused: { $0.focused }, isSecure: { $0.secure })?.id
+        }
+        let composer = Node(id: 2, editor: true)
+        XCTAssertEqual(resolve(Node(id: 0, children: [Node(id: 1, children: [composer])])), 2)
+        XCTAssertNil(resolve(Node(id: 0, children: [composer, Node(id: 3, editor: true)])))
+        XCTAssertEqual(resolve(Node(id: 0, children: [composer, Node(id: 3, editor: true, focused: true)])), 3)
+        XCTAssertNil(resolve(Node(id: 0, children: [Node(id: 1, children: [composer], secure: true)])))
+        // A bounded traversal must not mistake a partial tree for a unique editor.
+        XCTAssertNil(resolve(Node(id: 0, children: [composer] + (3...260).map { Node(id: $0) } + [Node(id: 261, editor: true)])))
+    }
+    func testBlankLinesAreNotCorrections() {
+        let edits = ModelEdits.difference(from: "A speling mistake.\n\n", to: "A spelling mistake.")
+        XCTAssertEqual(edits.count, 1)
+        XCTAssertEqual(edits.first?.original, "speling")
+        XCTAssertEqual(ModelEdits.difference(from: "Hello.\n\n", to: "Hello.").count, 0)
+    }
     func testModelEditValidation() {
         let text = "👋 A speling mistake. She go yesterday."
         let corrected = "👋 A spelling mistake. She went yesterday."
@@ -67,6 +90,8 @@ final class TextEditTests {
 @main struct CoreChecks {
     static func main() {
         let tests = TextEditTests()
+        tests.testHighlightRangesAndContainerFocus()
+        tests.testBlankLinesAreNotCorrections()
         tests.testModelEditValidation()
         tests.testAppMenuState()
         tests.testUnicodeReplacementAndStaleRejection()
