@@ -10,3 +10,5 @@ models/
 
 dist/
 .local-runtime/
+
+.local-signing/

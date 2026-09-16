@@ -17,7 +17,11 @@ The menu shows **Disable for Codex** when enabled and **Enable for Codex** when 
 
 ### Development signing
 
-Builds are ad-hoc signed. macOS can invalidate an existing Accessibility grant when the binary changes. A checked box for an older build does not prove the rebuilt app is trusted. Remove the old LocalWriter entry and add the rebuilt app if its diagnostics report missing access. A stable signing identity is needed for a smoother update experience.
+This workspace now uses a persistent local signing certificate. Fresh clones without that identity fall back to ad-hoc signing; macOS can invalidate their existing Accessibility grant when the binary changes. A checked box for an older build does not prove the rebuilt app is trusted. Remove the old LocalWriter entry and add the rebuilt app if its diagnostics report missing access. A stable signing identity is needed for a smoother update experience.
+
+An optional project-local signing setup is prepared in `scripts/sign-app.py`. It creates a private certificate and keychain only with an explicitly approved `--setup` invocation. It does not add a trusted root certificate. The keychain is locked after use; `.local-signing/` is ignored by Git. After setup, builds reuse a certificate-pinned identity and do not silently fall back to ad-hoc signing. Setup is installed on this development machine. `python3 scripts/check-signing.py` verifies that two distinct builds have different code hashes but the same certificate-pinned identity.
+
+The confirmed failure was macOS TCC retaining a requirement for an older code hash while the running build had a different hash. After choosing the final signing identity, reset only this app's stale entry with `tccutil reset Accessibility com.johnbgood.localwriter`, then grant the current app access once. Resetting this entry revokes its existing grant; it does not grant access automatically.
 
 ## Model setup
 

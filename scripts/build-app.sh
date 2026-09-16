@@ -22,5 +22,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-codesign --force --sign - "$APP"
+if [ -f "$PWD/.local-signing/imported" ]; then
+  python3 scripts/sign-app.py "$APP"
+else
+  codesign --force --sign - "$APP"
+  printf 'Warning: ad-hoc signing changes the Accessibility identity on rebuild.
+'
+fi
 printf 'Built %s\n' "$APP"
