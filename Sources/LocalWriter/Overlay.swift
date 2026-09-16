@@ -58,7 +58,7 @@ final class Overlay {
     func show(mark: Mark, message: String? = nil, replacement: String? = nil) {
         let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 9
         stack.edgeInsets = NSEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
-        let title = NSTextField(labelWithString: mark.sentence ? "Improve sentence · On-device" : "Spelling · \(mark.word)")
+        let title = NSTextField(labelWithString: mark.sentence ? "Improve sentence · On-device" : "Model correction · \(mark.word)")
         title.font = .boldSystemFont(ofSize: 13); stack.addArrangedSubview(title)
         if let message {
             let label = NSTextField(wrappingLabelWithString: message)
@@ -77,7 +77,7 @@ final class Overlay {
                 let button = NSButton(title: suggestion, target: self, action: #selector(choose(_:)))
                 button.identifier = NSUserInterfaceItemIdentifier(suggestion); stack.addArrangedSubview(button)
             }
-            if mark.suggestions.isEmpty { stack.addArrangedSubview(NSTextField(labelWithString: "No spelling suggestions available.")) }
+            if mark.suggestions.isEmpty { stack.addArrangedSubview(NSTextField(labelWithString: "No corrections available.")) }
         }
         let close = NSButton(title: "Dismiss", target: self, action: #selector(dismiss))
         stack.addArrangedSubview(close)

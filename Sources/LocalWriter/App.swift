@@ -3,7 +3,7 @@ import ApplicationServices
 import WritingCore
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var item: NSStatusItem!
     private let bridge = AccessibilityBridge()
     private let overlay = Overlay()
@@ -16,21 +16,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hovered: Mark?
     private var hoverBegan = Date()
     private var displayed: Mark?
+    private let runtime = LocalRuntime()
+    private var analysisTask: Task<Void, Never>?
+    private var analyzedText: String?
+    private var demoStatus: NSTextField?
     private var rewriteTask: Task<Void, Never>?
     private var demoWindow: NSWindow?
     private var lastGeometryUpdate = Date.distantPast
+    private var availability = AppAvailability(excluded: Set(UserDefaults.standard.stringArray(forKey: "excludedApps") ?? []))
+    private var lastExternalApp: AppAvailability.Target?
+    private var appToggle: NSMenuItem!
+    private var pauseToggle: NSMenuItem!
+    private let appStatus = NSMenuItem(title: "No app selected", action: nil, keyEquivalent: "")
     private let status = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
 
+    private var feedback: String {
+        get { status.title }
+        set { status.title = newValue; demoStatus?.stringValue = newValue }
+    }
+    func applicationWillTerminate(_ notification: Notification) { runtime.stop() }
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "✎"
-        let menu = NSMenu(); menu.addItem(status)
+        let menu = NSMenu(); menu.delegate = self; menu.addItem(status); menu.addItem(appStatus)
         menu.addItem(.separator())
         add("Grant Accessibility Access…", #selector(permission), to: menu)
-        add("Pause / Resume", #selector(toggle), to: menu)
-        add("Exclude / Include Current App", #selector(exclude), to: menu)
+        pauseToggle = add("Pause LocalWriter", #selector(toggle), to: menu)
+        appToggle = add(availability.actionTitle, #selector(exclude), to: menu)
+        add("Editor Diagnostics…", #selector(diagnostics), to: menu)
         add("Open Practice Editor", #selector(demo), to: menu)
+        add("Start Local Model", #selector(startModel), to: menu)
+        add("Check Again", #selector(checkAgain), to: menu)
         add("Model Setup Instructions", #selector(modelHelp), to: menu)
         menu.addItem(.separator()); add("Quit LocalWriter", #selector(quit), to: menu)
         item.menu = menu
@@ -40,22 +57,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
-        status.title = AXIsProcessTrusted() ? "Ready · English · Local" : "Accessibility permission needed"
+        try? runtime.start()
+        feedback = AXIsProcessTrusted() ? "Ready · Qwen3 · Local" : "Accessibility needed for other apps · Practice editor works"
+        if CommandLine.arguments.contains("--practice") || CommandLine.arguments.contains("--practice-check") { demo() }
+        if CommandLine.arguments.contains("--practice-check") { runPracticeCheck() }
     }
-    func add(_ title: String, _ selector: Selector, to menu: NSMenu) {
-        let entry = NSMenuItem(title: title, action: selector, keyEquivalent: ""); entry.target = self; menu.addItem(entry)
+    private func runPracticeCheck() {
+        Task { @MainActor in
+            for _ in 0..<150 {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                if let mark = marks.first(where: { !$0.sentence && $0.word == "speling" }),
+                   overlay.window.isVisible, let editor = snapshot {
+                    let localMark = overlay.view.marks.first(where: { $0.word == "speling" })!
+                    let area = localMark.rect.insetBy(dx: -4, dy: -4)
+                    guard let bitmap = overlay.view.bitmapImageRepForCachingDisplay(in: area) else { exit(1) }
+                    overlay.view.cacheDisplay(in: area, to: bitmap)
+                    var redPixels = 0
+                    for y in 0..<bitmap.pixelsHigh {
+                        for x in 0..<bitmap.pixelsWide {
+                            if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                               color.alphaComponent > 0.1, color.redComponent > 0.6, color.greenComponent < 0.5 { redPixels += 1 }
+                        }
+                    }
+                    guard redPixels > 0, marks.contains(where: { !$0.sentence && $0.suggestions.contains("went") }) else {
+                        print("FAIL: missing rendered underline or grammar correction"); exit(1)
+                    }
+                    displayed = mark
+                    apply("spelling")
+                    guard bridge.practiceEditor?.string.contains("spelling") == true,
+                          !bridge.apply(TextEdit(range: mark.range, original: mark.word, replacement: "spelling"), to: editor) else {
+                        print("FAIL: practice acceptance"); exit(1)
+                    }
+                    print("PASS: running practice app debounce → local model → \(redPixels) red underline pixels → accept correction")
+                    NSApp.terminate(nil); return
+                }
+            }
+            print("FAIL: practice loop timed out: \(feedback), active=\(NSApp.isActive)")
+            exit(1)
+        }
+    }
+    @discardableResult func add(_ title: String, _ selector: Selector, to menu: NSMenu) -> NSMenuItem {
+        let entry = NSMenuItem(title: title, action: selector, keyEquivalent: ""); entry.target = self; menu.addItem(entry); return entry
     }
     @objc func permission() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(options)
     }
-    @objc func toggle() { paused.toggle(); clear(); item.button?.title = paused ? "✎Ⅱ" : "✎" }
-    @objc func exclude() {
-        guard let id = NSWorkspace.shared.frontmostApplication?.bundleIdentifier, id != Bundle.main.bundleIdentifier else { return }
-        var excluded = UserDefaults.standard.stringArray(forKey: "excludedApps") ?? []
-        if excluded.contains(id) { excluded.removeAll { $0 == id } } else { excluded.append(id) }
-        UserDefaults.standard.set(excluded, forKey: "excludedApps"); clear()
+    private func rememberExternalApp() {
+        if let app = NSWorkspace.shared.frontmostApplication,
+           app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+           let id = app.bundleIdentifier {
+            lastExternalApp = .init(id: id, name: id == "com.openai.codex" ? "Codex" : (app.localizedName ?? id))
+        }
     }
+    func menuWillOpen(_ menu: NSMenu) {
+        rememberExternalApp()
+        availability.capture(lastExternalApp)
+        updateMenuState()
+    }
+    private func updateMenuState() {
+        appToggle.title = availability.actionTitle
+        appToggle.isEnabled = availability.target != nil
+        appStatus.title = availability.statusTitle
+        pauseToggle.title = paused ? "Resume LocalWriter" : "Pause LocalWriter"
+        item.button?.toolTip = paused ? "LocalWriter paused" : availability.statusTitle
+    }
+    @objc func toggle() {
+        paused.toggle(); clear(); item.button?.title = paused ? "✎Ⅱ" : "✎"
+        feedback = paused ? "Paused" : "Ready · English · Local"
+        updateMenuState()
+    }
+    @objc func exclude() {
+        availability.toggle()
+        UserDefaults.standard.set(Array(availability.excluded).sorted(), forKey: "excludedApps")
+        clear(); feedback = availability.statusTitle
+        updateMenuState()
+    }
+    @objc func diagnostics() {
+        let report = bridge.diagnosticSummary()
+        let alert = NSAlert(); alert.messageText = "Editor diagnostics"
+        alert.informativeText = report + "\n\nNo editor text is included."
+        alert.runModal()
+    }
+    @objc func startModel() {
+        do { try runtime.start(); clear(); feedback = "Starting local model…" }
+        catch { feedback = error.localizedDescription }
+    }
+    @objc func checkAgain() { clear(); feedback = "Ready to check again" }
     @objc func quit() { NSApp.terminate(nil) }
     @objc func modelHelp() {
         let alert = NSAlert(); alert.messageText = "Local sentence rewrites"
@@ -64,35 +152,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     @objc func demo() {
         if demoWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 660, height: 350), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            window.title = "LocalWriter Practice — macOS spelling preview"
+            let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 720, height: 350), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+            window.title = "LocalWriter — Model Practice Editor"
             window.isReleasedWhenClosed = false
-            let scroll = NSScrollView(frame: window.contentView!.bounds); scroll.autoresizingMask = [.width, .height]; scroll.hasVerticalScroller = true
-            let text = NSTextView(frame: scroll.bounds); text.isRichText = false; text.font = .systemFont(ofSize: 20)
-            text.textContainerInset = NSSize(width: 20, height: 20); text.autoresizingMask = [.width]
-            text.isContinuousSpellCheckingEnabled = true; text.isGrammarCheckingEnabled = true
-            text.string = "This is a sentnce with a speling mistake.\n\nFor cross-app hover suggestions, type a draft in Slack or TextEdit."
-            scroll.documentView = text; window.contentView?.addSubview(scroll); demoWindow = window
+            let content = window.contentView!
+            let label = NSTextField(labelWithString: "Checking with Qwen3 on your Mac…")
+            label.frame = NSRect(x: 16, y: 10, width: 688, height: 26)
+            label.autoresizingMask = [.width, .maxYMargin]
+            content.addSubview(label); demoStatus = label
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 46, width: 720, height: 304))
+            scroll.autoresizingMask = [.width, .height]; scroll.hasVerticalScroller = true
+            let text = NSTextView(frame: scroll.bounds)
+            text.isRichText = false; text.font = .systemFont(ofSize: 20)
+            text.textContainerInset = NSSize(width: 20, height: 20)
+            text.isVerticallyResizable = true; text.isHorizontallyResizable = false
+            text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = true
+            text.isContinuousSpellCheckingEnabled = false; text.isGrammarCheckingEnabled = false
+            text.isAutomaticSpellingCorrectionEnabled = false
+            text.string = "This is a speling mistake. She go to work yesterday."
+            scroll.documentView = text; content.addSubview(scroll)
+            bridge.practiceEditor = text; demoWindow = window
+            window.makeFirstResponder(text)
         }
-        NSApp.activate(ignoringOtherApps: true); demoWindow?.makeKeyAndOrderFront(nil)
+        clear(); NSApp.activate(ignoringOtherApps: true); demoWindow?.makeKeyAndOrderFront(nil)
     }
     func clear() {
+        analysisTask?.cancel(); analysisTask = nil; analyzedText = nil
         rewriteTask?.cancel(); rewriteTask = nil
         snapshot = nil; marks = []; hovered = nil; displayed = nil; pendingText = ""; overlay.hide()
     }
     func tick() {
-        guard !paused else { status.title = "Paused"; return }
-        guard AXIsProcessTrusted() else { clear(); status.title = "Accessibility permission needed"; return }
+        rememberExternalApp()
+        guard !paused else { feedback = "Paused"; return }
         let appID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-        guard !(UserDefaults.standard.stringArray(forKey: "excludedApps") ?? []).contains(appID) else { clear(); status.title = "Current app excluded"; return }
-        guard let current = bridge.snapshot() else { clear(); status.title = "No supported editor focused"; return }
-        if let old = snapshot, old.pid != current.pid || !CFEqual(old.element, current.element) { clear() }
+        guard !(UserDefaults.standard.stringArray(forKey: "excludedApps") ?? []).contains(appID) else { clear(); feedback = "Disabled for \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "this app")"; return }
+        guard let current = bridge.snapshot() else { clear(); feedback = bridge.failure; return }
+        if let old = snapshot, !old.sameEditor(as: current) { clear() }
         if current.text != pendingText {
             clear(); pendingText = current.text; changedAt = Date(); snapshot = current
-            status.title = "Waiting for typing pause…"; return
+            feedback = "Waiting for typing pause…"; return
         }
         guard Date().timeIntervalSince(changedAt) > 0.65 else { return }
-        if marks.isEmpty && snapshot?.text == current.text && Date().timeIntervalSince(lastGeometryUpdate) > 1 {
+        if analyzedText != current.text && analysisTask == nil {
             analyze(current)
         } else if Date().timeIntervalSince(lastGeometryUpdate) > 0.5 {
             let updated = marks.compactMap { mark -> Mark? in
@@ -119,27 +220,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     func analyze(_ editor: EditorSnapshot) {
-        snapshot = editor; marks = []
-        let ns = editor.text as NSString
-        var offset = 0
-        while offset < ns.length && marks.count < 80 {
-            let range = NSSpellChecker.shared.checkSpelling(of: editor.text, startingAt: offset, language: "en_US", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
-            guard range.location != NSNotFound, range.length > 0 else { break }
-            offset = NSMaxRange(range)
-            if let rect = bridge.bounds(range, in: editor) {
-                let guesses = NSSpellChecker.shared.guesses(forWordRange: range, in: editor.text, language: "en_US", inSpellDocumentWithTag: 0) ?? []
-                marks.append(Mark(range: range, rect: rect, word: ns.substring(with: range), suggestions: guesses, sentence: false))
+        snapshot = editor; feedback = "Checking spelling and grammar with Qwen3…"
+        analyzedText = editor.text
+        analysisTask = Task { [weak self] in
+            do {
+                let edits = try await LocalModel().analyze(editor.text)
+                guard !Task.isCancelled, let self, let current = self.snapshot,
+                      current.sameEditor(as: editor), current.text == editor.text else { return }
+                self.marks = edits.compactMap { edit in
+                    guard let rect = self.bridge.bounds(edit.range, in: current) else { return nil }
+                    return Mark(range: edit.range, rect: rect, word: edit.original, suggestions: [edit.replacement], sentence: false)
+                }
+                for range in SentenceRanges.inText(editor.text).prefix(80) where range.length <= 1000 {
+                    if let rect = self.bridge.bounds(range, in: current), rect.height < 40 {
+                        self.marks.append(Mark(range: range, rect: rect, word: (editor.text as NSString).substring(with: range), suggestions: [], sentence: true))
+                    }
+                }
+                self.overlay.draw(self.marks); self.lastGeometryUpdate = Date()
+                let visible = self.marks.filter { !$0.sentence }.count
+                self.feedback = edits.isEmpty ? "Qwen3 · No issues found" : visible == 0 ? "Qwen3 found \(edits.count) issues · Editor does not expose word positions" : "Qwen3 · \(visible) corrections · Hover an underline"
+                self.analysisTask = nil
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                self.feedback = error.localizedDescription
+                self.analysisTask = nil
             }
         }
-        for range in SentenceRanges.inText(editor.text).prefix(80) where range.length <= 1000 {
-            // Single-line sentences only: AX often returns a large enclosing box for wrapped text.
-            if let rect = bridge.bounds(range, in: editor), rect.height < 40 {
-                marks.append(Mark(range: range, rect: rect, word: ns.substring(with: range), suggestions: [], sentence: true))
-            }
-        }
-        overlay.draw(marks); lastGeometryUpdate = Date()
-        let count = marks.filter { !$0.sentence }.count
-        status.title = "Local · \(count) spelling suggestions"
     }
     func apply(_ replacement: String) {
         guard let editor = snapshot, let mark = displayed else { return }
@@ -167,6 +273,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct LocalWriterApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--check-editor") {
+            _ = NSApplication.shared
+            Task { @MainActor in
+                do {
+                    let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 700, height: 250), styleMask: [.titled], backing: .buffered, defer: false)
+                    let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 700, height: 250))
+                    view.font = .systemFont(ofSize: 20); view.isContinuousSpellCheckingEnabled = false
+                    view.string = "This is a speling mistake. She go to work yesterday."
+                    window.contentView = view
+                    let bridge = AccessibilityBridge(); bridge.practiceEditor = view
+                    let snapshot = bridge.practiceSnapshot()!
+                    let edits = try await LocalModel().analyze(snapshot.text)
+                    guard let spelling = edits.first(where: { $0.original.contains("speling") && $0.replacement.contains("spelling") }),
+                          edits.contains(where: { $0.original.contains("go") && $0.replacement.contains("went") }),
+                          let rect = bridge.bounds(spelling.range, in: snapshot), rect.width > 0,
+                          bridge.apply(spelling, to: snapshot), view.string.contains("spelling"),
+                          !bridge.apply(spelling, to: snapshot) else {
+                        print("FAIL: model detection, native geometry, correction or stale-edit guard; edits: \(edits)"); exit(1)
+                    }
+                    let overlay = Overlay()
+                    overlay.draw([Mark(range: spelling.range, rect: rect, word: spelling.original, suggestions: [spelling.replacement], sentence: false)])
+                    precondition(overlay.window.isVisible && overlay.view.marks.count == 1)
+                    overlay.hide()
+                    print("PASS: real model spelling + grammar, native word geometry, overlay visibility, correction and stale-edit rejection")
+                    exit(0)
+                } catch { print("FAIL: \(error)"); exit(1) }
+            }
+            NSApplication.shared.run()
+            return
+        }
+        if CommandLine.arguments.contains("--diagnose") {
+            let report = AccessibilityBridge().diagnosticSummary()
+            print(report)
+            if let i = CommandLine.arguments.firstIndex(of: "--report"), CommandLine.arguments.count > i + 1 {
+                try? report.write(toFile: CommandLine.arguments[i + 1], atomically: true, encoding: .utf8)
+            }
+            return
+        }
         if CommandLine.arguments.contains("--check-model") {
             Task {
                 do {
