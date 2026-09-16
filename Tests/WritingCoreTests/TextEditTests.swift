@@ -4,6 +4,10 @@ func XCTAssertEqual<T: Equatable>(_ lhs: T, _ rhs: T) { precondition(lhs == rhs,
 func XCTAssertNil<T>(_ value: T?) { precondition(value == nil, "Expected nil") }
 final class TextEditTests {
     func testHighlightRangesAndContainerFocus() {
+        XCTAssertEqual(TextLeafRanges.align(["Hello", "👋 wrong words"], in: "Hello\n\n👋 wrong words\n"), [NSRange(location: 0, length: 5), NSRange(location: 7, length: 14)])
+        XCTAssertEqual(TextLeafRanges.align(["same", "same"], in: "same\nsame"), [NSRange(location: 0, length: 4), NSRange(location: 5, length: 4)])
+        XCTAssertNil(TextLeafRanges.align(["wrong"], in: "Unrelated wrong"))
+        XCTAssertNil(TextLeafRanges.align(["Hello"], in: "Hello extra"))
         let text = "Hello\n\nwrong words\n"
         let ranges = HighlightRanges.words(in: NSRange(location: 0, length: text.utf16.count), text: text)
         XCTAssertEqual(ranges.map { (text as NSString).substring(with: $0) }, ["Hello", "wrong", "words"])

@@ -19,6 +19,11 @@ final class AccessibilityBridge {
     weak var practiceEditor: NSTextView?
     private(set) var failure = "Focus an editor to begin"
     private var prepared: Set<pid_t> = []
+    private func parameter(_ element: AXUIElement, _ name: String, _ input: CFTypeRef) -> CFTypeRef? {
+        var output: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(element, name as CFString, input, &output) == .success else { return nil }
+        return output
+    }
 
     func practiceSnapshot() -> EditorSnapshot? {
         guard let view = practiceEditor, let window = view.window, !view.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
@@ -120,6 +125,33 @@ final class AccessibilityBridge {
         failure = "Focused control is not an editable text field"
         return nil
     }
+    private func descendantBounds(_ range: NSRange, in editor: EditorSnapshot) -> CGRect? {
+        var queue = Array((attribute(editor.element, kAXChildrenAttribute) as? [AXUIElement] ?? []).reversed())
+        var leaves: [(AXUIElement, String)] = []
+        var index = 0
+        while !queue.isEmpty && index < 256 {
+            let element = queue.removeLast(); index += 1
+            if attribute(element, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole { return nil }
+            if attribute(element, kAXRoleAttribute) as? String == kAXStaticTextRole,
+               let text = attribute(element, kAXValueAttribute) as? String {
+                leaves.append((element, text))
+            } else { queue.append(contentsOf: (attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? []).reversed()) }
+        }
+        guard queue.isEmpty, let ranges = TextLeafRanges.align(leaves.map({ $0.1 }), in: editor.text) else { return nil }
+        var result = CGRect.null
+        for ((element, _), leafRange) in zip(leaves, ranges) {
+            let intersection = NSIntersectionRange(range, leafRange)
+            guard intersection.length > 0 else { continue }
+            var local = CFRange(location: intersection.location - leafRange.location, length: intersection.length)
+            guard let input = AXValueCreate(.cfRange, &local),
+                  let output = parameter(element, kAXBoundsForRangeParameterizedAttribute, input),
+                  CFGetTypeID(output) == AXValueGetTypeID() else { return nil }
+            var rect = CGRect.zero
+            guard AXValueGetValue(output as! AXValue, .cgRect, &rect), !rect.isEmpty else { return nil }
+            result = result.union(rect)
+        }
+        return result.isNull ? nil : result
+    }
     func rangeDiagnostic(_ range: NSRange, editor: EditorSnapshot) -> String {
         var cfRange = CFRange(location: range.location, length: range.length)
         let input = AXValueCreate(.cfRange, &cfRange)!
@@ -134,13 +166,15 @@ final class AccessibilityBridge {
             let rect = view.firstRect(forCharacterRange: range, actualRange: nil).intersection(editor.frame)
             return rect.isNull || rect.isEmpty ? nil : rect
         }
-        var range = CFRange(location: range.location, length: range.length)
-        guard let input = AXValueCreate(.cfRange, &range) else { return nil }
-        var output: CFTypeRef?
-        guard AXUIElementCopyParameterizedAttributeValue(editor.element, kAXBoundsForRangeParameterizedAttribute as CFString, input, &output) == .success,
-              let output, CFGetTypeID(output) == AXValueGetTypeID() else { return nil }
+        var cfRange = CFRange(location: range.location, length: range.length)
         var rect = CGRect.zero
-        guard AXValueGetValue(output as! AXValue, .cgRect, &rect), rect.width > 0, rect.height > 0 else { return nil }
+        if let input = AXValueCreate(.cfRange, &cfRange),
+           let output = parameter(editor.element, kAXBoundsForRangeParameterizedAttribute, input),
+           CFGetTypeID(output) == AXValueGetTypeID() {
+            AXValueGetValue(output as! AXValue, .cgRect, &rect)
+        }
+        if rect.isEmpty { rect = descendantBounds(range, in: editor) ?? .zero }
+        guard rect.width > 0, rect.height > 0, rect != editor.frame else { return nil }
         let clipped = rect.intersection(editor.frame)
         guard !clipped.isNull, clipped.width > 0, clipped.height > 0 else { return nil }
         return cocoaRect(clipped)

@@ -49,11 +49,13 @@ Whitespace-only changes are ignored. Phrase corrections retain one replacement r
 
 Editor discovery uses shared accessibility roles and focused descendants, without app-specific editor branches. Ambiguous or incomplete container searches do not select an arbitrary editor.
 
+Rich editors can advertise word bounds but return zero-sized rectangles. LocalWriter then maps their static text descendants back to the draft (allowing whitespace paragraph separators) and queries those text ranges. Mismatched text and whole-editor rectangles are rejected.
+
 The practice editor applies edits through NSTextView with undo support. External editors use macOS Accessibility selected-text replacement without clipboard or keystroke fallbacks.
 
 ## Limits
 
-- Chrome's standard textarea has been verified with a live model correction and word coordinates. Slack and Codex live compatibility still needs verification. Detection, word coordinates, and selected-text replacement depend on what each editor exposes.
+- Chrome's standard textarea and Slack's rich composer have been verified with a live model correction and precise word coordinates. Slack correction acceptance and Codex compatibility still need verification. Detection, word coordinates, and selected-text replacement depend on what each editor exposes.
 - Missing permissions, unreadable fields, missing word coordinates, model failures, and disabled apps are reported in the menu instead of silently appearing to work.
 - External drafts are limited to 4,000 UTF-16 code units. Sentence hover uses individual word positions across lines; editors must expose accurate range geometry.
 - Model suggestions are fallible and are applied only when explicitly accepted.
