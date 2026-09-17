@@ -29,6 +29,40 @@ final class UnderlineView: NSView {
 }
 
 @MainActor
+final class SuggestionButton: NSButton {
+    let caption: String
+    private var hovering = false
+    override var isFlipped: Bool { true }
+    private var captionStyle: [NSAttributedString.Key: Any] { [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.secondaryLabelColor] }
+    private var replacementStyle: [NSAttributedString.Key: Any] { [.font: NSFont.systemFont(ofSize: 17, weight: .semibold), .foregroundColor: NSColor.systemIndigo] }
+    init(caption: String, replacement: String, target: AnyObject, action: Selector) {
+        self.caption = caption
+        super.init(frame: .zero)
+        title = replacement; self.target = target; self.action = action
+        isBordered = false; setButtonType(.momentaryChange)
+        setAccessibilityLabel(caption + ": " + replacement)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override var intrinsicContentSize: NSSize {
+        let height = (title as NSString).boundingRect(with: NSSize(width: 306, height: CGFloat.greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: replacementStyle).height
+        return NSSize(width: 334, height: max(76, ceil(height) + 46))
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.systemIndigo.withAlphaComponent(isHighlighted ? 0.20 : hovering ? 0.14 : 0.08).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8).fill()
+        (caption as NSString).draw(in: NSRect(x: 14, y: 12, width: bounds.width - 28, height: 18), withAttributes: captionStyle)
+        (title as NSString).draw(with: NSRect(x: 14, y: 34, width: bounds.width - 28, height: bounds.height - 44), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: replacementStyle)
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+    override func mouseEntered(with event: NSEvent) { hovering = true; needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { hovering = false; needsDisplay = true }
+}
+
+@MainActor
 final class Overlay {
     let window: NSPanel
     let view = UnderlineView()
@@ -46,7 +80,7 @@ final class Overlay {
         window.contentView = view
         popover = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         popover.level = .popUpMenu; popover.hasShadow = true
-        popover.backgroundColor = .windowBackgroundColor
+        popover.isOpaque = false; popover.backgroundColor = .clear
         popover.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         popover.hidesOnDeactivate = false
     }
@@ -67,33 +101,43 @@ final class Overlay {
         }
         view.highlightedSentence = mark.sentence ? mark.range : nil
         view.needsDisplay = true
-        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 9
-        stack.edgeInsets = NSEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
-        let title = NSTextField(labelWithString: mark.sentence ? "Improve sentence · On-device" : "Model correction · \(mark.word)")
-        title.font = .boldSystemFont(ofSize: 13); stack.addArrangedSubview(title)
+        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 4
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        func addCard(_ text: String, caption: String, selector: Selector, replacement: String? = nil) {
+            let button = SuggestionButton(caption: caption, replacement: text, target: self, action: selector)
+            if let replacement { button.identifier = NSUserInterfaceItemIdentifier(replacement) }
+            stack.addArrangedSubview(button)
+            button.widthAnchor.constraint(equalToConstant: 334).isActive = true
+        }
         if let message {
             let label = NSTextField(wrappingLabelWithString: message)
-            label.preferredMaxLayoutWidth = 320; stack.addArrangedSubview(label)
+            label.font = .systemFont(ofSize: 13); label.textColor = .secondaryLabelColor
+            label.preferredMaxLayoutWidth = 306
+            stack.addArrangedSubview(label)
+            label.widthAnchor.constraint(equalToConstant: 334).isActive = true
         }
         if let replacement {
-            let label = NSTextField(wrappingLabelWithString: replacement)
-            label.preferredMaxLayoutWidth = 320; stack.addArrangedSubview(label)
-            let button = NSButton(title: "Apply rewrite", target: self, action: #selector(choose(_:)))
-            button.identifier = NSUserInterfaceItemIdentifier(replacement); stack.addArrangedSubview(button)
+            addCard(replacement, caption: "Suggested rewrite", selector: #selector(choose(_:)), replacement: replacement)
         } else if mark.sentence && message == nil {
-            let button = NSButton(title: "Suggest a clearer sentence", target: self, action: #selector(rewrite))
-            stack.addArrangedSubview(button)
+            addCard("Suggest a clearer sentence", caption: "Improve wording · Keep the meaning", selector: #selector(rewrite))
         } else if !mark.sentence && message == nil {
             for suggestion in mark.suggestions.prefix(5) {
-                let button = NSButton(title: suggestion, target: self, action: #selector(choose(_:)))
-                button.identifier = NSUserInterfaceItemIdentifier(suggestion); stack.addArrangedSubview(button)
+                addCard(suggestion.isEmpty ? "Remove this text" : suggestion, caption: "Suggested correction", selector: #selector(choose(_:)), replacement: suggestion)
             }
             if mark.suggestions.isEmpty { stack.addArrangedSubview(NSTextField(labelWithString: "No corrections available.")) }
         }
-        let close = NSButton(title: "Dismiss", target: self, action: #selector(dismiss))
+        let close = NSButton(title: "  Dismiss", target: self, action: #selector(dismiss))
+        close.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
+        close.imagePosition = .imageLeading; close.isBordered = false
+        close.font = .systemFont(ofSize: 14); close.contentTintColor = .secondaryLabelColor
+        close.alignment = .left; close.setAccessibilityLabel("Dismiss suggestion")
         stack.addArrangedSubview(close)
+        close.widthAnchor.constraint(equalToConstant: 334).isActive = true
+        close.heightAnchor.constraint(equalToConstant: 36).isActive = true
         stack.translatesAutoresizingMaskIntoConstraints = false
-        let content = NSView(); content.addSubview(stack)
+        let content = NSBox(); content.boxType = .custom; content.borderWidth = 0
+        content.cornerRadius = 12; content.fillColor = .windowBackgroundColor
+        content.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor), stack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             stack.topAnchor.constraint(equalTo: content.topAnchor), stack.bottomAnchor.constraint(equalTo: content.bottomAnchor),

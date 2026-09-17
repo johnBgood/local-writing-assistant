@@ -291,6 +291,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 @main
 struct LocalWriterApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--render-popup") {
+            _ = NSApplication.shared
+            let overlay = Overlay()
+            overlay.show(mark: Mark(range: NSRange(location: 0, length: 9), rect: CGRect(x: 300, y: 400, width: 100, height: 20), word: "She don't", suggestions: ["She doesn’t"], sentence: false))
+            let content = overlay.popover.contentView!
+            content.layoutSubtreeIfNeeded()
+            let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds)!
+            content.cacheDisplay(in: content.bounds, to: bitmap)
+            try! bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: "/tmp/localwriter-popup.png"))
+            overlay.hide()
+            return
+        }
         if CommandLine.arguments.contains("--check-clipboard") {
             let board = NSPasteboard.withUniqueName()
             defer { board.releaseGlobally() }
