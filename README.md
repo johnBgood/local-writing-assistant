@@ -2,6 +2,10 @@
 
 An English writing assistant for macOS 14+, built with Swift and AppKit. **Qwen3 4B handles spelling, grammar, and sentence rewrites locally.** The app does not use macOS spellchecking or autocorrection.
 
+## Installation
+
+Voir le [guide complet en français : app Mac, modèle, extension Chrome, mises à jour et dépannage](docs/INSTALLATION.fr.md).
+
 ## Run
 
 ```sh

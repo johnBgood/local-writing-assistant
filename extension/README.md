@@ -4,6 +4,8 @@ This Manifest V3 extension uses the same Qwen3 client and UTF-16 corrections as 
 
 ## Install
 
+Pour toutes les étapes sur un nouveau Mac et la procédure de mise à jour, voir le [guide d’installation en français](../docs/INSTALLATION.fr.md).
+
 1. Build the app with `scripts/build-app.sh`. Keep LocalWriter and its local model running.
 2. Register the narrowly scoped native host with `python3 scripts/install-extension-host.py`. This writes one per-user host manifest allowing only this extension's stable ID. It installs a bridge executable and launcher under `~/Library/Application Support/LocalWriter/NativeMessaging/`, outside protected Documents/Desktop folders.
 3. Open `chrome://extensions`, turn on Developer mode, choose **Load unpacked**, and select this `extension` directory.
@@ -25,6 +27,8 @@ Passwords, non-text input types, readonly and disabled fields are excluded. Draf
 Choose **Enable underlines on this tab** in a Google Doc. The separate Docs adapter reads positioned SVG text annotations and checks visible text (up to 4,000 UTF-16 units). It measures word advances against the annotation bounds, updates on document mutation/scroll/resize, and uses the same local model and suggestion cards. It never treats Docs’ invisible typing iframe as the document value.
 
 Replacement first selects the displayed range, asks Docs’ copy handler to confirm the exact selected text using an in-memory clipboard event, then sends the replacement through its paste handler. It leaves the system clipboard alone, aborts if the selection or document differs, and verifies the resulting text. Inline spelling and grammar replacements have been verified in a live Chrome Google Doc; the presence of annotations and support for clipboard events can vary. If text annotations are absent, the adapter reports that limitation. It does not enable or impersonate another extension.
+
+Select a phrase with the mouse or keyboard and pause to request a whole-selection rewrite. The card shows the proposed wording and replaces the full selection when clicked. Changing the selection or document invalidates the proposal. Selections must currently match a unique phrase within the visible text; repeated or offscreen selections are rejected safely. This new selection workflow still needs live validation after reloading the extension.
 
 Only currently rendered visible text is analyzed, so scrolling may change the checked context. Complex layouts and scripts other than English are not verified. Reloading the document requires enabling LocalWriter again.
 

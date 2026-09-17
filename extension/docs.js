@@ -6,6 +6,7 @@
   const {validEdit} = LocalWriterCore;
   const host = document.createElement('div');
   host.style.cssText = 'all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647';
+  host.dataset.localwriterVersion='0.2.1';
   document.documentElement.append(host);
   const root = host.attachShadow({mode:'closed'});
   const style = document.createElement('style');
@@ -13,6 +14,7 @@
   const lines = document.createElement('div'); root.append(style, lines);
   const measure = document.createElement('canvas').getContext('2d');
   let disabled=false, timer, hover, panel, snapshot=null, edits=[], generation=0, busy=false, pending=false, applying=false;
+  let selectionTimer, selectionGeneration=0, selectionActive=false;
   let status='Waiting for Google Docs text…';
   const pause = ms => new Promise(resolve=>setTimeout(resolve,ms));
   function hide() { clearTimeout(hover); panel?.remove(); panel=null; }
@@ -59,9 +61,9 @@
   function show(message,rect,edit) {
     hide(); panel=document.createElement('div');panel.className='panel';
     const card=document.createElement(edit?'button':'div');card.className=edit?'card':'status';
-    if(edit) {const caption=document.createElement('small');caption.textContent='Suggested correction';card.append(caption);card.onclick=()=>apply(edit);}
+    if(edit) {const caption=document.createElement('small');caption.textContent=edit.baseText?'Replace selected text · Same meaning':'Suggested correction';card.append(caption);card.onclick=()=>apply(edit);}
     card.append(document.createTextNode(message));panel.append(card);
-    const dismiss=document.createElement('button');dismiss.className='dismiss';dismiss.textContent='🗑  Dismiss';dismiss.onclick=hide;panel.append(dismiss);
+    const dismiss=document.createElement('button');dismiss.className='dismiss';dismiss.textContent='🗑  Dismiss';dismiss.onclick=()=>{cancelSelection();schedule();};panel.append(dismiss);
     panel.addEventListener('mousedown',e=>e.preventDefault());root.append(panel);
     const height=panel.getBoundingClientRect().height;
     panel.style.left=Math.max(8,Math.min(rect.left,innerWidth-348))+'px';
@@ -83,7 +85,7 @@
   }
   function schedule() {clearTimeout(timer);if(!disabled && !applying) timer=setTimeout(check,800);}
   async function check() {
-    if(disabled || applying) return;
+    if(disabled || applying || selectionActive) return;
     if(busy) {pending=true;return;}
     const value=read();
     if(!value.text.trim()) {status='Google Docs has not exposed its text annotations. Inline checking is unavailable in this document.';return;}
@@ -101,6 +103,68 @@
     const doc=document.querySelector('.docs-texteventtarget-iframe')?.contentDocument;
     return {doc,target:doc?.querySelector('[contenteditable="true"]')};
   }
+  async function selectedText() {
+    const {target}=inputTarget();
+    if(!target) return '';
+    const copied=new DataTransfer();
+    target.dispatchEvent(new ClipboardEvent('copy',{bubbles:true,cancelable:true,clipboardData:copied}));
+    await pause(30);
+    return copied.getData('text/plain');
+  }
+  function cancelSelection() {
+    selectionGeneration++;selectionActive=false;clearTimeout(selectionTimer);hide();
+  }
+  async function rewriteSelection() {
+    if(disabled || applying) return;
+    const run=selectionGeneration, before=read();
+    const selectedOriginal=await selectedText();
+    const original=selectedOriginal.trim();
+    if(run!==selectionGeneration || disabled || applying) return;
+    if(!original.trim()) {selectionActive=false;schedule();return;}
+    const range=LocalWriterCore.selectionRange(before.text,original);
+    if(!range) {notice('Select a unique phrase fully visible on screen to improve its wording.');return;}
+    const anchor=rangeBoxes(before,range.start,range.length)[0];
+    if(!anchor) return;
+    selectionActive=true;
+    show('Improving selected text with your local model…',anchor);
+    try {
+      const result=await chrome.runtime.sendMessage({method:'rewrite',text:original});
+      if(run!==selectionGeneration || disabled || applying || read().text!==before.text) return;
+      if(await selectedText()!==selectedOriginal || run!==selectionGeneration) return;
+      if(!result?.ok) throw Error(result?.error||'LocalWriter did not respond.');
+      if(typeof result.rewrite!=='string' || !result.rewrite.trim()) throw Error('The model returned an empty suggestion.');
+      if(result.rewrite===original) {show('This selection already reads well.',anchor);return;}
+      show(result.rewrite,anchor,{...range,replacement:result.rewrite,baseText:before.text,selectionGeneration:run,selectedOriginal});
+    } catch(e) {if(run===selectionGeneration) show(e.message,anchor);}
+  }
+  function selectionStart(event) {
+    if(!event.isTrusted || event.composedPath().includes(host) || applying) return;
+    cancelSelection();
+  }
+  function selectionEnd(event) {
+    if(!event.isTrusted || event.composedPath().includes(host) || disabled || applying) return;
+    clearTimeout(selectionTimer);selectionTimer=setTimeout(rewriteSelection,250);
+  }
+  document.addEventListener('pointerdown',selectionStart,true);
+  document.addEventListener('pointerup',selectionEnd,true);
+  // Keyboard selection happens inside Docs' offscreen typing iframe.
+  const boundFrames=new WeakSet();
+  function bindSelectionKeys() {
+    const {doc}=inputTarget();if(!doc || boundFrames.has(doc)) return;
+    boundFrames.add(doc);doc.addEventListener('keydown',selectionStart,true);doc.addEventListener('keyup',selectionEnd,true);
+    // Docs also updates its hidden editable DOM when its model selection changes.
+    // This catches selections even when editor handlers consume keyboard events.
+    let previous=doc.body?.textContent || '';
+    const selectionObserver=new MutationObserver(()=>{
+      const current=doc.body?.textContent || '';
+      if(current===previous) return;
+      previous=current;
+      if(disabled || applying) return;
+      cancelSelection();selectionTimer=setTimeout(rewriteSelection,250);
+    });
+    if(doc.body) selectionObserver.observe(doc.body,{subtree:true,childList:true,characterData:true});
+  }
+  bindSelectionKeys();
   function mouse(type,point,buttons) {
     const target=document.elementFromPoint(point.x,point.y);
     if(!target || !target.closest('.kix-appview-editor')) throw Error('The document moved. Try the suggestion again.');
@@ -109,16 +173,18 @@
   async function apply(edit) {
     if(applying) return;
     let before=read();
-    if(before.text!==snapshot?.text || !validEdit(before.text,edit)) {snapshot=null;notice('The document changed. Checking again…');schedule();return;}
+    if((edit.selectionGeneration!==undefined && edit.selectionGeneration!==selectionGeneration) || before.text!==(edit.baseText ?? snapshot?.text) || !validEdit(before.text,edit)) {snapshot=null;notice('The document changed. Checking again…');schedule();return;}
     const rects=rangeBoxes(before,edit.start,edit.length);
     if(!rects.length) return;
-    applying=true;hide();lines.replaceChildren();
+    applying=true;selectionActive=false;hide();lines.replaceChildren();
     try {
+      if(edit.selectedOriginal===undefined) {
       const first=rects[0], last=rects.at(-1);
       const start={x:first.left+.2,y:(first.top+first.bottom)/2};
       const end={x:last.right-.2,y:(last.top+last.bottom)/2};
       mouse('mousedown',start,1);mouse('mousemove',end,1);mouse('mouseup',end,0);
       await pause(80);
+      }
       const {target}=inputTarget();
       if(!target) throw Error('Could not find Google Docs’ typing surface.');
       // Ask Docs' copy handler for the real model selection without touching the
@@ -127,9 +193,9 @@
       target.dispatchEvent(new ClipboardEvent('copy',{bubbles:true,cancelable:true,clipboardData:copied}));
       await pause(30);
       const selected=copied.getData('text/plain');
-      if(selected!==edit.original) throw Error('Google Docs did not confirm the exact selection. No text was replaced.');
+      if(selected!==(edit.selectedOriginal ?? edit.original)) throw Error('Google Docs did not confirm the exact selection. No text was replaced.');
       if(read().text!==before.text) throw Error('The document changed during selection. Try again.');
-      const data=new DataTransfer();data.setData('text/plain',edit.replacement);
+      const data=new DataTransfer();data.setData('text/plain',edit.selectedOriginal===undefined ? edit.replacement : LocalWriterCore.preserveSelectionWhitespace(edit.selectedOriginal,edit.replacement));
       target.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
       const expected=LocalWriterCore.applyEdits(before.text,[edit]);
       for(let i=0;i<15;i++) {await pause(100);if(read().text===expected) {status='Replacement applied.';snapshot=null;return;}}
@@ -139,18 +205,19 @@
   }
   const observer=new MutationObserver(records=>{
     if(applying || disabled) return;
+    bindSelectionKeys();
     const relevant=records.some(record=>record.target.closest?.('.kix-canvas-tile-text') ||
       [...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1 && (node.matches?.('.kix-canvas-tile-text') || node.querySelector?.('.kix-canvas-tile-text'))));
     if(!relevant) return;
     const current=read();
-    if(current.text!==snapshot?.text) {clear();schedule();} else draw();
+    if(current.text!==snapshot?.text) {cancelSelection();clear();schedule();} else draw();
   });
   const surface=document.querySelector('.kix-appview-editor');
   if(surface) observer.observe(surface,{subtree:true,childList:true,attributes:true,attributeFilter:['aria-label','transform','width','height']});
-  document.addEventListener('scroll',()=>{hide();draw();schedule();},true);
-  window.addEventListener('resize',()=>{hide();draw();schedule();});
+  document.addEventListener('scroll',()=>{cancelSelection();draw();schedule();},true);
+  window.addEventListener('resize',()=>{cancelSelection();draw();schedule();});
   chrome.runtime.onMessage.addListener((message,_sender,reply)=>{
-    if(message.method==='disableTab') {disabled=true;clear();clearTimeout(timer);reply({ok:true});}
+    if(message.method==='disableTab') {disabled=true;cancelSelection();clear();clearTimeout(timer);reply({ok:true});}
     if(message.method==='docsStatus') reply({ok:true,status,annotations:read().runs.length,suggestions:edits.length});
   });
   globalThis.localWriterDocs={resume(){disabled=false;snapshot=null;schedule();}};

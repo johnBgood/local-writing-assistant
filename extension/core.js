@@ -7,5 +7,17 @@
     for (const e of sorted) { if (!validEdit(text,e) || e.start < end) throw Error('Outdated or invalid correction. Check again.'); end=e.start+e.length; }
     return sorted.reverse().reduce((s,e)=>s.slice(0,e.start)+e.replacement+s.slice(e.start+e.length),text);
   };
-  globalThis.LocalWriterCore = {validEdit,applyEdits};
+  // A selected phrase must map to exactly one range before replacing it.
+  const selectionRange = (text, selected) => {
+    if (typeof selected !== 'string' || !selected.trim() || selected.length > 4000) return null;
+    const start = text.indexOf(selected);
+    if (start < 0 || text.indexOf(selected,start+1) !== -1) return null;
+    return {start,length:selected.length,original:selected};
+  };
+  const preserveSelectionWhitespace = (selected, replacement) => {
+    const leading = selected.match(/^\s*/u)[0];
+    const trailing = selected.match(/\s*$/u)[0];
+    return leading + replacement + trailing;
+  };
+  globalThis.LocalWriterCore = {validEdit,applyEdits,selectionRange,preserveSelectionWhitespace};
 })();
