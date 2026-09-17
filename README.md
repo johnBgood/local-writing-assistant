@@ -51,7 +51,7 @@ Editor discovery uses shared accessibility roles and focused descendants, withou
 
 Rich editors can advertise word bounds but return zero-sized rectangles. LocalWriter then maps their static text descendants back to the draft (allowing whitespace paragraph separators) and queries those text ranges. Mismatched text and whole-editor rectangles are rejected.
 
-The practice editor applies edits through NSTextView with undo support. External editors use macOS Accessibility selected-text replacement without clipboard or keystroke fallbacks.
+The practice editor applies edits through NSTextView with undo support. External editors first use macOS Accessibility selected-text replacement, waiting for the requested selection and verifying the resulting draft. If that operation is unsupported or leaves the draft unchanged, LocalWriter verifies the same editor, text, and selection again and pastes the accepted suggestion using a targeted Command-V event. The previous clipboard formats are restored unless a newer clipboard copy has occurred. No Return key is sent. Changes are reported as successful only after the resulting draft matches the expected text.
 
 ## Limits
 
@@ -77,6 +77,7 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 - `CoreChecks`: Unicode ranges, stale edits, word differences including insertions and deletions, and app enable/disable states.
 - `--check-editor`: real-model spelling and grammar, native word coordinates, overlay visibility, acceptance, and stale-edit rejection.
 - `--practice-check`: opens a synthetic practice draft and exercises the running background loop, checks rendered red underline pixels, and accepts a correction. Requires the local model server; closes the test app afterward.
+- `--check-clipboard`: uses an isolated test pasteboard to verify preservation of text and binary formats and that newer clipboard copies are not overwritten.
 - **Editor Diagnostics…** reports Accessibility metadata without editor text. `--diagnose` also exposes this for development.
 - Use `open -n -g dist/LocalWriter.app --args --probe-editor --app com.google.Chrome --report /tmp/localwriter-probe.txt` for a targeted, text-free geometry/model diagnostic. LaunchServices preserves the app's Accessibility identity; a direct shell invocation may inherit different permission attribution.
 

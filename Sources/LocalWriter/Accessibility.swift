@@ -58,6 +58,11 @@ final class AccessibilityBridge {
             lines.append("Role: \(attribute(element, kAXRoleAttribute) as? String ?? "missing")")
             lines.append("Subrole: \(attribute(element, kAXSubroleAttribute) as? String ?? "missing")")
             lines.append("Text length: \((attribute(element, kAXValueAttribute) as? String)?.utf16.count ?? -1)")
+            for name in [kAXSelectedTextAttribute, kAXSelectedTextRangeAttribute, kAXValueAttribute] {
+                var settable = DarwinBoolean(false)
+                let status = AXUIElementIsAttributeSettable(element, name as CFString, &settable)
+                lines.append("\(name) writable: \(status == .success && settable.boolValue)")
+            }
             var names: CFArray?
             AXUIElementCopyParameterizedAttributeNames(element, &names)
             lines.append("Range APIs: \(names as? [String] ?? [])")
@@ -191,13 +196,81 @@ final class AccessibilityBridge {
             view.didChangeText()
             return true
         }
+        return false
+    }
+
+    func applyVerified(_ edit: TextEdit, to editor: EditorSnapshot) async -> Bool {
+        if editor.nativeView != nil { return apply(edit, to: editor) }
         guard let current = snapshot(), current.sameEditor(as: editor),
-              edit.applying(to: current.text, snapshot: editor.text) != nil else { return false }
+              let expected = edit.applying(to: current.text, snapshot: editor.text) else {
+            failure = "The draft or focused editor changed. Hover the new suggestion and try again."; return false
+        }
         var settable = DarwinBoolean(false)
-        guard AXUIElementIsAttributeSettable(editor.element, kAXSelectedTextAttribute as CFString, &settable) == .success, settable.boolValue else { return false }
+        let directReplacement = AXUIElementIsAttributeSettable(editor.element, kAXSelectedTextAttribute as CFString, &settable) == .success && settable.boolValue
         var range = CFRange(location: edit.range.location, length: edit.range.length)
         guard let value = AXValueCreate(.cfRange, &range),
-              AXUIElementSetAttributeValue(editor.element, kAXSelectedTextRangeAttribute as CFString, value) == .success else { return false }
-        return AXUIElementSetAttributeValue(editor.element, kAXSelectedTextAttribute as CFString, edit.replacement as CFString) == .success
+              AXUIElementSetAttributeValue(editor.element, kAXSelectedTextRangeAttribute as CFString, value) == .success else {
+            failure = "This editor could not select the correction range."; return false
+        }
+        var selected = false
+        for _ in 0..<20 {
+            guard let fresh = snapshot(), fresh.sameEditor(as: editor), fresh.text == editor.text else {
+                failure = "The draft or focus changed before replacement."; return false
+            }
+            if let value = attribute(editor.element, kAXSelectedTextRangeAttribute), CFGetTypeID(value) == AXValueGetTypeID() {
+                var actual = CFRange()
+                if AXValueGetValue(value as! AXValue, .cfRange, &actual), actual.location == range.location, actual.length == range.length,
+                   attribute(editor.element, kAXSelectedTextAttribute) as? String == edit.original {
+                    selected = true; break
+                }
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+        guard selected else { failure = "The editor did not select the requested words. Nothing was replaced."; return false }
+        let status = directReplacement ? AXUIElementSetAttributeValue(editor.element, kAXSelectedTextAttribute as CFString, edit.replacement as CFString) : .attributeUnsupported
+        for _ in 0..<(status == .success ? 30 : 0) {
+            let actual = attribute(editor.element, kAXValueAttribute) as? String
+            if actual == expected { failure = "Correction applied"; return true }
+            if let actual, actual != editor.text { failure = "The draft changed unexpectedly. Check it before trying again."; return false }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+        // Rich editors may acknowledge AXSelectedText without implementing the edit.
+        // Paste only into the same, unchanged, explicitly verified selection.
+        return await pasteReplacement(edit, editor: editor, expected: expected)
+    }
+
+    private func selectionMatches(_ edit: TextEdit, editor: EditorSnapshot) -> Bool {
+        guard let current = snapshot(), current.sameEditor(as: editor), current.text == editor.text,
+              let value = attribute(editor.element, kAXSelectedTextRangeAttribute), CFGetTypeID(value) == AXValueGetTypeID(),
+              attribute(editor.element, kAXSelectedTextAttribute) as? String == edit.original else { return false }
+        var range = CFRange()
+        return AXValueGetValue(value as! AXValue, .cfRange, &range) && range.location == edit.range.location && range.length == edit.range.length
+    }
+
+    private func pasteReplacement(_ edit: TextEdit, editor: EditorSnapshot, expected: String) async -> Bool {
+        guard !Task.isCancelled, selectionMatches(edit, editor: editor) else {
+            failure = "The draft, selection, or focus changed. Nothing was pasted."; return false
+        }
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: false),
+              let clipboard = PasteboardLease(text: edit.replacement) else {
+            failure = "Could not prepare replacement while preserving the clipboard."; return false
+        }
+        defer { clipboard.restore() }
+        guard selectionMatches(edit, editor: editor) else {
+            failure = "The draft, selection, or focus changed. Nothing was pasted."; return false
+        }
+        down.flags = .maskCommand; up.flags = .maskCommand
+        down.postToPid(editor.pid); up.postToPid(editor.pid)
+        for _ in 0..<50 {
+            let actual = attribute(editor.element, kAXValueAttribute) as? String
+            if actual == expected { failure = "Correction applied"; return true }
+            if let actual, actual != editor.text {
+                failure = "The draft changed unexpectedly. Check it before trying again."; return false
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+        failure = "The editor did not apply the paste. Your previous clipboard has been restored."
+        return false
     }
 }

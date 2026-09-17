@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var snapshot: EditorSnapshot?
     private var marks: [Mark] = []
     private var paused = false
+    private var applying = false
     private var pendingText = ""
     private var changedAt = Date()
     private var hovered: Mark?
@@ -85,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     }
                     displayed = mark
                     apply("spelling")
+                    for _ in 0..<100 where applying { try? await Task.sleep(nanoseconds: 30_000_000) }
                     guard bridge.practiceEditor?.string.contains("spelling") == true,
                           !bridge.apply(TextEdit(range: mark.range, original: mark.word, replacement: "spelling"), to: editor) else {
                         print("FAIL: practice acceptance"); exit(1)
@@ -183,6 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         snapshot = nil; marks = []; hovered = nil; displayed = nil; pendingText = ""; overlay.hide()
     }
     func tick() {
+        guard !applying else { return }
         rememberExternalApp()
         guard !paused else { feedback = "Paused"; return }
         let appID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
@@ -257,10 +260,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     func apply(_ replacement: String) {
-        guard let editor = snapshot, let mark = displayed else { return }
+        guard !applying, let editor = snapshot, let mark = displayed else { return }
         let edit = TextEdit(range: mark.range, original: mark.word, replacement: replacement)
-        if bridge.apply(edit, to: editor) { clear() }
-        else { overlay.show(mark: mark, message: "This editor could not apply the change, or the text changed. You can select and replace the text manually.", replacement: nil) }
+        applying = true
+        overlay.show(mark: mark, message: "Applying correction…")
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.applying = false }
+            if await self.bridge.applyVerified(edit, to: editor) { self.clear(); self.feedback = "Correction applied" }
+            else { self.feedback = self.bridge.failure; self.overlay.show(mark: mark, message: self.bridge.failure) }
+        }
     }
     func rewrite() {
         guard let mark = displayed, let editor = snapshot else { return }
@@ -282,6 +291,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 @main
 struct LocalWriterApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--check-clipboard") {
+            let board = NSPasteboard.withUniqueName()
+            defer { board.releaseGlobally() }
+            let item = NSPasteboardItem()
+            item.setString("original", forType: .string)
+            let custom = NSPasteboard.PasteboardType("localwriter.test.binary")
+            item.setData(Data([0, 1, 255]), forType: custom)
+            board.writeObjects([item])
+            let lease = PasteboardLease(text: "replacement", pasteboard: board)!
+            precondition(board.string(forType: .string) == "replacement")
+            lease.restore()
+            precondition(board.string(forType: .string) == "original")
+            precondition(board.data(forType: custom) == Data([0, 1, 255]))
+            let newer = PasteboardLease(text: "replacement", pasteboard: board)!
+            board.clearContents(); board.setString("new copy", forType: .string)
+            newer.restore()
+            precondition(board.string(forType: .string) == "new copy")
+            print("PASS: clipboard formats restored; newer clipboard copy preserved")
+            return
+        }
         if CommandLine.arguments.contains("--check-editor") {
             _ = NSApplication.shared
             Task { @MainActor in
