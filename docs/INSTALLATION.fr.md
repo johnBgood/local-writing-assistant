@@ -54,7 +54,7 @@ Pour tester sans permission d’accessibilité :
 open dist/LocalWriter.app --args --practice
 ```
 
-Dans l’éditeur de test, saisir `This is a speling mistake.`, attendre l’analyse, puis accepter la suggestion. Dans Slack ou Notes, laisser le texte non envoyé, placer le curseur dans l’éditeur et attendre. Le menu **Enable for … / Disable for …** contrôle l’app concernée. **Editor Diagnostics…** indique notamment l’état de la permission.
+Dans l’éditeur de test, saisir `This is a speling mistake.`, attendre l’analyse, puis accepter la suggestion. Dans Slack ou Notes, laisser le texte non envoyé, placer le curseur dans l’éditeur et attendre. Pour reformuler une phrase dans une app native, sélectionner le texte puis relâcher la souris ou les touches : une proposition complète apparaît après l’analyse locale. Cliquer sur la carte pour remplacer la sélection. L’éditeur doit exposer sa sélection à l’accessibilité ; changer la sélection ou le texte invalide la proposition. Le menu **Enable for … / Disable for …** contrôle l’app concernée. **Editor Diagnostics…** indique notamment l’état de la permission.
 
 ### Signature et permission après recompilation
 

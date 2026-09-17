@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hovered: Mark?
     private var hoverBegan = Date()
     private var displayed: Mark?
+    private var selectedRange: NSRange?
+    private var selectionBegan = Date()
+    private var selectionRequested = false
+    private var rewriteResult: String?
     private let runtime = LocalRuntime()
     private var analysisTask: Task<Void, Never>?
     private var currentEdits: [TextEdit] = []
@@ -55,14 +59,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.menu = menu
         overlay.action = { [weak self] replacement in self?.apply(replacement) }
         overlay.rewriteAction = { [weak self] in self?.rewrite() }
-        overlay.dismissAction = { [weak self] in self?.displayed = nil; self?.hoverBegan = Date() }
+        overlay.dismissAction = { [weak self] in self?.rewriteTask?.cancel(); self?.displayed = nil; self?.hoverBegan = Date() }
         timer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
         try? runtime.start()
         feedback = AXIsProcessTrusted() ? "Ready · Qwen3 · Local" : "Accessibility needed for other apps · Practice editor works"
-        if CommandLine.arguments.contains("--practice") || CommandLine.arguments.contains("--practice-check") { demo() }
+        if CommandLine.arguments.contains("--practice") || CommandLine.arguments.contains("--practice-check") || CommandLine.arguments.contains("--selection-check") { demo() }
         if CommandLine.arguments.contains("--practice-check") { runPracticeCheck() }
+        if CommandLine.arguments.contains("--selection-check") { runSelectionCheck() }
+    }
+    private func runSelectionCheck() {
+        Task { @MainActor in
+            guard let view = bridge.practiceEditor else { exit(1) }
+            view.string = "She go to work yesterday."
+            let fullRange = NSRange(location: 0, length: view.string.utf16.count)
+            view.setSelectedRange(fullRange)
+            for _ in 0..<300 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                if let result = rewriteResult, displayed?.range == fullRange {
+                    guard result != view.string, overlay.popover.isVisible else { exit(1) }
+                    apply(result)
+                    for _ in 0..<100 where applying { try? await Task.sleep(nanoseconds: 30_000_000) }
+                    guard view.string == result else { print("FAIL: selected phrase was not replaced"); exit(1) }
+                    view.setSelectedRange(NSRange(location: 0, length: 0))
+                    guard bridge.practiceSnapshot().flatMap({ bridge.selectedRange(in: $0) }) == nil else { exit(1) }
+                    print("PASS: native selection → automatic local rewrite → full-range replacement; invalid selection rejected")
+                    NSApp.terminate(nil); return
+                }
+            }
+            print("FAIL: selection rewrite timed out: \(feedback)"); exit(1)
+        }
     }
     private func runPracticeCheck() {
         Task { @MainActor in
@@ -182,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func clear() {
         analysisTask?.cancel(); analysisTask = nil; analyzedText = nil; currentEdits = []
         rewriteTask?.cancel(); rewriteTask = nil
+        selectedRange = nil; selectionRequested = false; rewriteResult = nil
         snapshot = nil; marks = []; hovered = nil; displayed = nil; pendingText = ""; overlay.hide()
     }
     func tick() {
@@ -195,6 +223,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if current.text != pendingText {
             clear(); pendingText = current.text; changedAt = Date(); snapshot = current
             feedback = "Waiting for typing pause…"; return
+        }
+        snapshot = current
+        let selection = bridge.selectedRange(in: current)
+        if selection != selectedRange {
+            rewriteTask?.cancel(); rewriteResult = nil
+            selectedRange = selection; selectionBegan = Date(); selectionRequested = false
+            displayed = nil; overlay.popover.orderOut(nil)
+        }
+        if let selection {
+            // Wait for mouse/keyboard selection to settle, independent of pointer hover.
+            guard NSEvent.pressedMouseButtons == 0, Date().timeIntervalSince(selectionBegan) > 0.3 else { return }
+            if !selectionRequested {
+                selectionRequested = true
+                let wordRanges = HighlightRanges.words(in: selection, text: current.text)
+                guard let anchor = wordRanges.compactMap({ bridge.bounds($0, in: current) }).first else {
+                    feedback = "Selected text has no accessible position"; return
+                }
+                displayed = Mark(range: selection, rect: anchor,
+                    word: (current.text as NSString).substring(with: selection), suggestions: [], sentence: true)
+                rewrite()
+            }
+            return
         }
         guard Date().timeIntervalSince(changedAt) > 0.65 else { return }
         if analyzedText != current.text && analysisTask == nil {
@@ -261,6 +311,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func apply(_ replacement: String) {
         guard !applying, let editor = snapshot, let mark = displayed else { return }
+        if let selectedRange, bridge.selectedRange(in: editor) != selectedRange {
+            clear(); feedback = "The selection changed. Select the phrase again."; return
+        }
         let edit = TextEdit(range: mark.range, original: mark.word, replacement: replacement)
         applying = true
         overlay.show(mark: mark, message: "Applying correction…")
@@ -273,12 +326,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func rewrite() {
         guard let mark = displayed, let editor = snapshot else { return }
+        let expectedSelection = selectedRange
+        rewriteResult = nil
         rewriteTask?.cancel(); overlay.show(mark: mark, message: "Generating locally…")
         rewriteTask = Task { [weak self] in
             do {
                 let result = try await LocalModel().rewrite(mark.word)
                 guard !Task.isCancelled, let self, self.snapshot?.text == editor.text,
-                      self.displayed?.range == mark.range else { return }
+                      self.snapshot?.sameEditor(as: editor) == true,
+                      self.displayed?.range == mark.range,
+                      self.selectedRange == expectedSelection,
+                      expectedSelection == nil || self.bridge.selectedRange(in: editor) == expectedSelection else { return }
+                self.rewriteResult = result
                 self.overlay.show(mark: mark, replacement: result)
             } catch {
                 guard !Task.isCancelled, let self else { return }

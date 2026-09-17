@@ -166,6 +166,22 @@ final class AccessibilityBridge {
         if let output, CFGetTypeID(output) == AXValueGetTypeID() { AXValueGetValue(output as! AXValue, .cgRect, &rect) }
         return "Range status: \(error.rawValue), raw rect: \(rect)"
     }
+    func selectedRange(in editor: EditorSnapshot) -> NSRange? {
+        let range: NSRange
+        if let view = editor.nativeView { range = view.selectedRange() }
+        else {
+            guard let value = attribute(editor.element, kAXSelectedTextRangeAttribute),
+                  CFGetTypeID(value) == AXValueGetTypeID(), AXValueGetType(value as! AXValue) == .cfRange else { return nil }
+            var selected = CFRange()
+            guard AXValueGetValue(value as! AXValue, .cfRange, &selected), selected.location >= 0, selected.length > 0 else { return nil }
+            range = NSRange(location: selected.location, length: selected.length)
+        }
+        let count = editor.text.utf16.count
+        guard range.location != NSNotFound, range.location <= count, range.length > 0,
+              range.length <= count - range.location,
+              !(editor.text as NSString).substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return range
+    }
     func bounds(_ range: NSRange, in editor: EditorSnapshot) -> CGRect? {
         if let view = editor.nativeView {
             let rect = view.firstRect(forCharacterRange: range, actualRange: nil).intersection(editor.frame)

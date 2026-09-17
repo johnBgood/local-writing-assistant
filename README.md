@@ -49,7 +49,7 @@ The server listens on `127.0.0.1:11434`. The bundled-runtime startup and start s
 
 After a typing pause, the model returns conservatively corrected text in structured JSON. The app computes word-level differences and UTF-16 ranges locally. Accepting a correction requires the original editor and entire draft to still match the analyzed snapshot. Typing cancels outdated requests. Password fields and excluded apps are skipped.
 
-Whitespace-only changes are ignored. Phrase corrections retain one replacement range while drawing separate underlines beneath their words, never across blank lines. Hovering a sentence highlights its words in blue and offers a meaning-preserving rewrite; accepting it replaces the complete sentence.
+Whitespace-only changes are ignored. Phrase corrections retain one replacement range while drawing separate underlines beneath their words, never across blank lines. Hovering a sentence highlights its words in blue and offers a meaning-preserving rewrite; accepting it replaces the complete sentence. Selecting text in a native editor also requests a rewrite automatically once the selection settles. The suggestion is invalidated when the selection, editor or draft changes. This requires the editor to expose its selected range through Accessibility.
 
 Editor discovery uses shared accessibility roles and focused descendants, without app-specific editor branches. Ambiguous or incomplete container searches do not select an arbitrary editor.
 
@@ -81,6 +81,7 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 - `CoreChecks`: Unicode ranges, stale edits, word differences including insertions and deletions, and app enable/disable states.
 - `--check-editor`: real-model spelling and grammar, native word coordinates, overlay visibility, acceptance, and stale-edit rejection.
 - `--practice-check`: opens a synthetic practice draft and exercises the running background loop, checks rendered red underline pixels, and accepts a correction. Requires the local model server; closes the test app afterward.
+- `--selection-check`: verifies automatic selected-text rewriting and full-range acceptance in the native practice editor with the real local model.
 - `--check-clipboard`: uses an isolated test pasteboard to verify preservation of text and binary formats and that newer clipboard copies are not overwritten.
 - **Editor Diagnostics…** reports Accessibility metadata without editor text. `--diagnose` also exposes this for development.
 - Use `open -n -g dist/LocalWriter.app --args --probe-editor --app com.google.Chrome --report /tmp/localwriter-probe.txt` for a targeted, text-free geometry/model diagnostic. LaunchServices preserves the app's Accessibility identity; a direct shell invocation may inherit different permission attribution.
