@@ -216,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if Date().timeIntervalSince(hoverBegan) > 0.6 { overlay.popover.orderOut(nil); displayed = nil }
             return
         }
-        if Date().timeIntervalSince(hoverBegan) > 0.65 && (displayed?.range != mark.range || displayed?.sentence != mark.sentence) {
+        if Date().timeIntervalSince(hoverBegan) > 0.2 && (displayed?.range != mark.range || displayed?.sentence != mark.sentence) {
             rewriteTask?.cancel(); displayed = mark; overlay.show(mark: mark)
         }
     }

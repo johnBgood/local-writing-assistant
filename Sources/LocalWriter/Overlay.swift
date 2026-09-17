@@ -36,6 +36,8 @@ final class Overlay {
     var action: ((String) -> Void)?
     var rewriteAction: (() -> Void)?
     var dismissAction: (() -> Void)?
+    private var anchorX: CGFloat?
+    private var anchoredRange: NSRange?
     init() {
         window = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = false
@@ -59,6 +61,10 @@ final class Overlay {
     }
     func hide() { view.highlightedSentence = nil; window.orderOut(nil); popover.orderOut(nil) }
     func show(mark: Mark, message: String? = nil, replacement: String? = nil) {
+        if !popover.isVisible || anchoredRange != mark.range {
+            anchorX = NSEvent.mouseLocation.x - 20
+            anchoredRange = mark.range
+        }
         view.highlightedSentence = mark.sentence ? mark.range : nil
         view.needsDisplay = true
         let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 9
@@ -96,8 +102,10 @@ final class Overlay {
         popover.contentView = content
         let size = stack.fittingSize
         let screen = NSScreen.screens.first(where: { $0.frame.intersects(mark.rect) })?.visibleFrame ?? NSScreen.main!.visibleFrame
-        let x = min(max(mark.rect.minX, screen.minX), screen.maxX - 350)
-        let y = max(screen.minY, min(mark.rect.minY - size.height - 6, screen.maxY - size.height))
+        let x = min(max(anchorX ?? mark.rect.minX, screen.minX), screen.maxX - 350)
+        let above = mark.rect.maxY + 4
+        let preferredY = above + size.height <= screen.maxY ? above : mark.rect.minY - size.height - 4
+        let y = max(screen.minY, min(preferredY, screen.maxY - size.height))
         popover.setFrame(CGRect(x: x, y: y, width: 350, height: size.height), display: true)
         popover.orderFrontRegardless()
     }
