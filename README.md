@@ -59,7 +59,7 @@ The practice editor applies edits through NSTextView with undo support. External
 - Missing permissions, unreadable fields, missing word coordinates, model failures, and disabled apps are reported in the menu instead of silently appearing to work.
 - External drafts are limited to 4,000 UTF-16 code units. Sentence hover uses individual word positions across lines; editors must expose accurate range geometry.
 - Model suggestions are fallible and are applied only when explicitly accepted.
-- Google Docs canvas integration is not implemented.
+- Native Google Docs canvas integration is unavailable; the Chrome companion has an experimental separate adapter.
 - No launch-at-login registration, installer, notarization, or automatic model-download UI yet.
 
 ## Development and checks
@@ -85,4 +85,4 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 
 ## Chrome extension (local prototype)
 
-The `extension/` directory contains an unpacked Manifest V3 companion using the same local Qwen3 model via a narrowly scoped native messaging host. Standard browser fields have inline corrections; Google Docs currently has selection checking and copy-back only. See [extension setup and limitations](extension/README.md).
+The `extension/` directory contains an unpacked Manifest V3 companion using the same local Qwen3 model via a narrowly scoped native messaging host. Standard browser fields have inline corrections; Google Docs has an experimental visible-text adapter plus selection checking and copy-back. See [extension setup and limitations](extension/README.md).

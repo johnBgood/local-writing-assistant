@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Register only this extension with Chrome's per-user native messaging host."""
-import base64, hashlib, json, pathlib, shlex
+import base64, hashlib, json, pathlib, shlex, shutil
 root=pathlib.Path(__file__).resolve().parent.parent
 manifest=json.loads((root/'extension/manifest.json').read_text())
 digest=hashlib.sha256(base64.b64decode(manifest['key'])).hexdigest()[:32]
 extension_id=''.join(chr(ord('a')+int(c,16)) for c in digest)
-launcher=root/'dist/localwriter-native-host'
-launcher.parent.mkdir(exist_ok=True)
-launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(root/'dist/LocalWriter.app/Contents/MacOS/LocalWriter'))+' --native-messaging "$@"\n')
+# Keep Chrome's child process outside macOS-protected Documents/Desktop folders.
+bridge_dir=pathlib.Path.home()/'Library/Application Support/LocalWriter/NativeMessaging'
+bridge_dir.mkdir(parents=True,exist_ok=True)
+binary=bridge_dir/'LocalWriterBridge'
+shutil.copy2(root/'dist/LocalWriter.app/Contents/MacOS/LocalWriter', binary)
+launcher=bridge_dir/'localwriter-native-host'
+launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(binary))+' --native-messaging "$@"\n')
 launcher.chmod(0o755)
 folder=pathlib.Path.home()/'Library/Application Support/Google/Chrome/NativeMessagingHosts'
 folder.mkdir(parents=True,exist_ok=True)

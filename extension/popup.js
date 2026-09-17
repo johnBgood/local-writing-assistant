@@ -11,9 +11,9 @@ async function activeTab(){return (await chrome.tabs.query({active:true,currentW
 $('enable').onclick=async()=>{
   try {
     const tab=await activeTab();
-    if (tab.url?.startsWith('https://docs.google.com/document/')) throw Error('Google Docs uses a canvas editor. Use selected-text checking below; inline Docs underlines are not available yet.');
-    await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},files:['core.js','content.js']});
-    $('status').textContent='Enabled for this tab until reload. Focus a text field and pause typing.';
+    const docs=tab.url?.startsWith('https://docs.google.com/document/');
+    await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:!docs},files:docs?['core.js','docs.js']:['core.js','content.js']});
+    $('status').textContent=docs?'Enabled for visible Google Docs text. Close this panel to see suggestions.':'Enabled for this tab until reload. Focus a text field and pause typing.';
   } catch(e){$('status').textContent=e.message;}
 };
 $('selection').onclick=async()=>{
@@ -51,3 +51,8 @@ $('check').onclick=()=>check('analyze');$('rewrite').onclick=()=>check('rewrite'
 if(location.search.includes('review=1')) chrome.storage.session.get('reviewText').then(async data=>{$('draft').value=data.reviewText||'';await chrome.storage.session.remove('reviewText');$('enable').hidden=$('disable').hidden=$('selection').hidden=true;});
 
 $('disable').onclick=async()=>{try{const tab=await activeTab();await chrome.tabs.sendMessage(tab.id,{method:'disableTab'});$('status').textContent='Underlines disabled for this tab.';}catch{$('status').textContent='Underlines were not enabled on this tab.';}};
+
+activeTab().then(async tab=>{
+  if(!tab.url?.startsWith('https://docs.google.com/document/')) return;
+  try {const state=await chrome.tabs.sendMessage(tab.id,{method:'docsStatus'});if(state?.ok) $('status').textContent=state.status;} catch {}
+});

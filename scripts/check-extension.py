@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import json, pathlib, struct, subprocess
 root=pathlib.Path(__file__).resolve().parent.parent
-binary=root/'dist/LocalWriter.app/Contents/MacOS/LocalWriter'
+host=pathlib.Path.home()/'Library/Application Support/Google/Chrome/NativeMessagingHosts/com.johnbgood.localwriter.json'
+binary=pathlib.Path(json.loads(host.read_text())['path']) if host.exists() else root/'dist/LocalWriter.app/Contents/MacOS/LocalWriter'
 def request(value):
     data=json.dumps(value).encode()
     result=subprocess.run([str(binary),'--native-messaging'],input=struct.pack('<I',len(data))+data,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=100,check=True)
