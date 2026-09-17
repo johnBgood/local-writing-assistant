@@ -14,6 +14,10 @@ Pour toutes les étapes sur un nouveau Mac et la procédure de mise à jour, voi
 
 The public manifest key keeps the unpacked extension ID stable. No private signing key is stored. Rerun host registration after rebuilding the app to update the installed bridge. The installed bridge does not depend on the checkout location. A fresh machine also needs Ollama/Qwen3 installed as described in the root README.
 
+## Languages and dictionary
+
+Choose Automatic, English, Français or Deutsch in the popup. **Personal dictionary** lists shared words with Add/Remove controls; correction cards also offer **Add to dictionary**. The Mac app and Chrome share these preferences through the native host. Rebuild the app and reinstall its bridge when upgrading to extension 0.3.0. Word additions protect spelling while allowing nearby grammar corrections. Switch back to the tab to refresh changes made from the Mac menu.
+
 ## Ordinary web editors
 
 Click **Enable underlines on this tab**, then focus a textarea, text input, or contenteditable editor. Pause typing, hover or click a red underline, then click the replacement card. Enablement lasts until reload. **Disable underlines on this tab** stops analysis and clears marks. Restricted Chrome pages cannot be enabled.

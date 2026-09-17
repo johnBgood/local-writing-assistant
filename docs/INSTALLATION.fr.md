@@ -1,6 +1,6 @@
 # Installer et mettre à jour LocalWriter
 
-LocalWriter comprend une app de barre de menus pour les éditeurs macOS et une extension Chrome pour les pages web, dont Google Docs. Les deux utilisent Qwen3 4B sur le Mac. Le modèle traite les textes en anglais.
+LocalWriter comprend une app de barre de menus pour les éditeurs macOS et une extension Chrome pour les pages web, dont Google Docs. Les deux utilisent Qwen3 4B sur le Mac. Le modèle traite les textes en anglais, français et allemand.
 
 ## Prérequis
 
@@ -105,6 +105,20 @@ Le modèle doit rester en fonctionnement. Dans le menu de l’app Mac, choisir *
 5. Sélectionner une phrase, avec la souris ou le clavier, et patienter pour voir sa reformulation. Cliquer sur la carte pour remplacer la sélection entière.
 
 L’activation vaut pour l’onglet jusqu’à son actualisation. Après actualisation, il faut réactiver LocalWriter. L’adaptateur Google Docs est expérimental : il analyse le texte visible, jusqu’à 4 000 unités UTF-16. Une sélection répétée ou partiellement hors écran peut être refusée pour éviter de modifier le mauvais passage. Si les annotations de texte de Docs sont absentes, utiliser la vérification de sélection dans le popup avec copie manuelle.
+
+## Langues et dictionnaire personnel
+
+Dans le menu Mac **Language**, ou le popup Chrome **Writing language**, choisir **Automatic · EN / FR / DE**, **English**, **Français** ou **Deutsch**. Le réglage est partagé. La détection automatique est locale et les reformulations doivent rester dans la langue d’origine ; les passages très courts ou multilingues peuvent être ambigus.
+
+Pour ne plus corriger un mot :
+
+- Cliquer sur **Add “mot” to dictionary** dans sa carte de correction.
+- Ou ouvrir **Personal dictionary** dans le menu Mac / le popup Chrome pour ajouter un mot manuellement.
+- Pour le retirer, choisir **Remove “mot”** dans cette même liste.
+
+Le dictionnaire accepte un mot à la fois (accents, apostrophes et traits d’union compris), jusqu’à 80 caractères et 1 000 entrées. Les mots sont protégés pendant les corrections et reformulations ; la grammaire autour reste analysée. Les variantes orthographiques ou formes fléchies ne sont pas ajoutées automatiquement.
+
+Les réglages et mots sont stockés uniquement sur le Mac dans `~/Library/Application Support/LocalWriter/preferences.json`. Le pont Chrome lit le même fichier. Après un changement depuis le menu Mac, revenir dans l’onglet pour relancer l’analyse. La version **0.3.0** de l’extension nécessite de reconstruire l’app et réinstaller le pont, puis de recharger l’extension et les pages ouvertes.
 
 ## 7. Mettre à jour sans conserver d’ancien script
 

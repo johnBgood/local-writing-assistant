@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 import WritingCore
 
 struct LocalModel {
@@ -32,22 +33,49 @@ struct LocalModel {
               let result = try? JSONDecoder().decode(type, from: Data(envelope.message.content.utf8)) else { throw ModelError.invalidResponse }
         return result
     }
+    private func detectedLanguage(_ text: String) -> NLLanguage? {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.languageConstraints = [.english, .french, .german]
+        recognizer.processString(text)
+        return recognizer.dominantLanguage
+    }
+    private func languageInstruction(_ text: String, preferences: WritingPreferences) -> String {
+        var language = preferences.language
+        if language == "auto" { language = detectedLanguage(text)?.rawValue ?? "auto" }
+        let name = ["en": "English", "fr": "French", "de": "German"][language]
+        guard let name else { return preferences.instruction }
+        return "You are a \(name) proofreader. The source text is in \(name). Return the edited text in \(name), never an English translation of French or German. Preserve any other-language quotations or passages."
+    }
+    private func validateLanguage(_ output: String, source: String) throws {
+        // Very short fragments are ambiguous; longer prose must stay in its language.
+        if source.split(whereSeparator: { $0.isWhitespace }).count >= 5,
+           let before = detectedLanguage(source), let after = detectedLanguage(output), before != after {
+            throw ModelError.invalidResponse
+        }
+    }
     func analyze(_ text: String) async throws -> [TextEdit] {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         struct Result: Decodable { let corrected: String }
-        let result = try await response(Result.self, text: text,
-            instruction: "Fix spelling and grammatical errors in English text. Preserve all wording, meaning, names, tone and punctuation except where incorrect. Do not improve style or add commentary. Return JSON with the corrected text in corrected. If the text is correct, return it unchanged.",
+        let preferences = try PreferenceStore.read()
+        let protected = ProtectedWords(text, words: preferences.words)
+        let result = try await response(Result.self, text: protected.text,
+            instruction: "Fix spelling and grammatical errors. \(languageInstruction(text, preferences: preferences)) Never translate. Preserve LWTERM placeholder tokens exactly; they represent correctly spelled personal dictionary words. Preserve all wording, meaning, names, tone and punctuation except where incorrect. Do not improve style or add commentary. Return JSON with the corrected text in corrected. If the text is correct, return it unchanged.",
             schema: ["type": "object", "properties": ["corrected": ["type": "string"]], "required": ["corrected"]])
-        guard !result.corrected.isEmpty, result.corrected.utf16.count <= max(1000, text.utf16.count * 2) else { throw ModelError.invalidResponse }
-        let edits = ModelEdits.difference(from: text, to: result.corrected)
-        guard text.split(whereSeparator: { $0.isWhitespace }) == result.corrected.split(whereSeparator: { $0.isWhitespace }) || !edits.isEmpty else { throw ModelError.invalidResponse }
+        let corrected = try protected.restore(result.corrected)
+        guard !corrected.isEmpty, corrected.utf16.count <= max(1000, text.utf16.count * 2) else { throw ModelError.invalidResponse }
+        try validateLanguage(corrected, source: text)
+        let edits = ModelEdits.difference(from: text, to: corrected)
+        guard text.split(whereSeparator: { $0.isWhitespace }) == corrected.split(whereSeparator: { $0.isWhitespace }) || !edits.isEmpty else { throw ModelError.invalidResponse }
         return edits
     }
     func rewrite(_ text: String) async throws -> String {
         struct Result: Decodable { let rewrite: String }
-        let result = try await response(Result.self, text: text, instruction: "Edit English prose. Fix grammar and improve clarity while preserving meaning, facts, names and tone. Return a single rewrite string. Do not explain or add facts.", schema: ["type": "object", "properties": ["rewrite": ["type": "string"]], "required": ["rewrite"]])
-        let rewrite = result.rewrite.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferences = try PreferenceStore.read()
+        let protected = ProtectedWords(text, words: preferences.words)
+        let result = try await response(Result.self, text: protected.text, instruction: "Edit prose. \(languageInstruction(text, preferences: preferences)) Never translate. Preserve LWTERM placeholder tokens exactly; they represent personal dictionary words. Fix grammar and improve clarity while preserving meaning, facts, names and tone. Return a single rewrite string. Do not explain or add facts.", schema: ["type": "object", "properties": ["rewrite": ["type": "string"]], "required": ["rewrite"]])
+        let rewrite = try protected.restore(result.rewrite).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rewrite.isEmpty, rewrite.count <= max(1000, text.count * 3) else { throw ModelError.invalidResponse }
+        try validateLanguage(rewrite, source: text)
         return rewrite
     }
 }

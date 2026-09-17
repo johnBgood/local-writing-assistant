@@ -4,6 +4,10 @@ import WritingCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private var preferences = WritingPreferences()
+    private var preferencesChecked = Date.distantPast
+    private let languageMenu = NSMenu(title: "Language")
+    private let dictionaryMenu = NSMenu(title: "Personal dictionary")
     private var item: NSStatusItem!
     private let bridge = AccessibilityBridge()
     private let overlay = Overlay()
@@ -55,9 +59,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add("Start Local Model", #selector(startModel), to: menu)
         add("Check Again", #selector(checkAgain), to: menu)
         add("Model Setup Instructions", #selector(modelHelp), to: menu)
+        let languageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: ""); languageItem.submenu = languageMenu; menu.addItem(languageItem)
+        let dictionaryItem = NSMenuItem(title: "Personal dictionary", action: nil, keyEquivalent: ""); dictionaryItem.submenu = dictionaryMenu; menu.addItem(dictionaryItem)
         menu.addItem(.separator()); add("Quit LocalWriter", #selector(quit), to: menu)
         item.menu = menu
         overlay.action = { [weak self] replacement in self?.apply(replacement) }
+        overlay.dictionaryAction = { [weak self] word in
+            do { try PreferenceStore.add(word); self?.clear(); self?.feedback = "Added “\(word)” to dictionary" }
+            catch { self?.feedback = error.localizedDescription }
+        }
         overlay.rewriteAction = { [weak self] in self?.rewrite() }
         overlay.dismissAction = { [weak self] in self?.rewriteTask?.cancel(); self?.displayed = nil; self?.hoverBegan = Date() }
         timer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in
@@ -141,6 +151,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
     func menuWillOpen(_ menu: NSMenu) {
+        preferences = (try? PreferenceStore.read()) ?? preferences
+        languageMenu.removeAllItems(); dictionaryMenu.removeAllItems()
+        for (code, title) in [("auto", "Automatic · EN / FR / DE"), ("en", "English"), ("fr", "Français"), ("de", "Deutsch")] {
+            let entry = add(title, #selector(setLanguage(_:)), to: languageMenu)
+            entry.representedObject = code; entry.state = preferences.language == code ? .on : .off
+        }
+        add("Add a word…", #selector(addDictionaryWord), to: dictionaryMenu)
+        for word in preferences.words {
+            let entry = add("Remove “\(word)”", #selector(removeDictionaryWord(_:)), to: dictionaryMenu); entry.representedObject = word
+        }
+
         rememberExternalApp()
         availability.capture(lastExternalApp)
         updateMenuState()
@@ -162,6 +183,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         UserDefaults.standard.set(Array(availability.excluded).sorted(), forKey: "excludedApps")
         clear(); feedback = availability.statusTitle
         updateMenuState()
+    }
+    @objc func setLanguage(_ sender: NSMenuItem) {
+        guard let code = sender.representedObject as? String else { return }
+        do { try PreferenceStore.update { $0.language = code }; clear() } catch { feedback = error.localizedDescription }
+    }
+    @objc func addDictionaryWord() {
+        let alert = NSAlert(); alert.messageText = "Add a word to your personal dictionary"
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24)); alert.accessoryView = input
+        alert.addButton(withTitle: "Add"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try PreferenceStore.add(input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)); clear() }
+        catch { feedback = error.localizedDescription }
+    }
+    @objc func removeDictionaryWord(_ sender: NSMenuItem) {
+        guard let word = sender.representedObject as? String else { return }
+        do { try PreferenceStore.update { $0.words.removeAll { $0 == word } }; clear() }
+        catch { feedback = error.localizedDescription }
     }
     @objc func diagnostics() {
         let report = bridge.diagnosticSummary()
@@ -214,6 +252,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func tick() {
         guard !applying else { return }
+        if Date().timeIntervalSince(preferencesChecked) > 1 {
+            preferencesChecked = Date()
+            if let latest = try? PreferenceStore.read(), latest != preferences { preferences = latest; clear() }
+        }
         rememberExternalApp()
         guard !paused else { feedback = "Paused"; return }
         let appID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
@@ -275,7 +317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for edit in currentEdits {
             for wordRange in HighlightRanges.words(in: edit.range, text: editor.text) {
                 if let rect = bridge.bounds(wordRange, in: editor) {
-                    result.append(Mark(range: edit.range, rect: rect, word: edit.original, suggestions: [edit.replacement], sentence: false, displayRange: wordRange))
+                    result.append(Mark(range: edit.range, rect: rect, word: edit.original, suggestions: [edit.replacement], sentence: false, displayRange: wordRange, dictionaryWord: PreferenceStore.word(at: wordRange, in: editor.text)))
                 }
             }
         }

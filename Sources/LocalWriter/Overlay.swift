@@ -7,6 +7,7 @@ struct Mark {
     let suggestions: [String]
     let sentence: Bool
     var displayRange: NSRange? = nil
+    var dictionaryWord: String? = nil
 }
 
 @MainActor
@@ -68,6 +69,7 @@ final class Overlay {
     let view = UnderlineView()
     let popover: NSPanel
     var action: ((String) -> Void)?
+    var dictionaryAction: ((String) -> Void)?
     var rewriteAction: (() -> Void)?
     var dismissAction: (() -> Void)?
     private var anchorX: CGFloat?
@@ -126,6 +128,11 @@ final class Overlay {
             }
             if mark.suggestions.isEmpty { stack.addArrangedSubview(NSTextField(labelWithString: "No corrections available.")) }
         }
+        if !mark.sentence, let word = mark.dictionaryWord {
+            let add = NSButton(title: "Add “\(word)” to dictionary", target: self, action: #selector(addWord(_:)))
+            add.identifier = NSUserInterfaceItemIdentifier(word); add.isBordered = false
+            stack.addArrangedSubview(add)
+        }
         let close = NSButton(title: "  Dismiss", target: self, action: #selector(dismiss))
         close.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)
         close.imagePosition = .imageLeading; close.isBordered = false
@@ -154,6 +161,7 @@ final class Overlay {
         popover.orderFrontRegardless()
     }
     @objc private func choose(_ sender: NSButton) { if let text = sender.identifier?.rawValue { action?(text) } }
+    @objc private func addWord(_ sender: NSButton) { if let word = sender.identifier?.rawValue { dictionaryAction?(word) } }
     @objc private func rewrite() { rewriteAction?() }
     @objc private func dismiss() { view.highlightedSentence = nil; view.needsDisplay = true; popover.orderOut(nil); dismissAction?() }
 }

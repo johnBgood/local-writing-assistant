@@ -19,5 +19,10 @@
     const trailing = selected.match(/\s*$/u)[0];
     return leading + replacement + trailing;
   };
-  globalThis.LocalWriterCore = {validEdit,applyEdits,selectionRange,preserveSelectionWhitespace};
+  const wordAt = (text, start) => {
+    for(const word of text.matchAll(/[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*/gu))
+      if(word.index<=start && word.index+word[0].length>start) return word[0];
+    return null;
+  };
+  globalThis.LocalWriterCore = {validEdit,applyEdits,selectionRange,preserveSelectionWhitespace,wordAt};
 })();

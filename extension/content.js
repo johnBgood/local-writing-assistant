@@ -37,7 +37,10 @@
       }
     }
   }
-  function show(edit,rect){hide();panel=document.createElement('div');panel.className='panel';const button=document.createElement('button');button.className='card';const caption=document.createElement('small');caption.textContent='Suggested correction';button.append(caption,document.createTextNode(edit.replacement||'Remove this text'));button.onclick=()=>apply(edit);panel.append(button);finishPanel(rect);}
+  function show(edit,rect){hide();panel=document.createElement('div');panel.className='panel';const button=document.createElement('button');button.className='card';const caption=document.createElement('small');caption.textContent='Suggested correction';button.append(caption,document.createTextNode(edit.replacement||'Remove this text'));button.onclick=()=>apply(edit);panel.append(button);
+    const word=LocalWriterCore.wordAt(snapshot,edit.start);
+    if(word){const add=document.createElement('button');add.className='dismiss';add.textContent='Add “'+word+'” to dictionary';add.onclick=async()=>{try{await request('addWord',word);reset();schedule();}catch(e){message(e.message);}};panel.append(add);}
+    finishPanel(rect);}
   function apply(edit){
     if(!editor?.isConnected||text(editor)!==snapshot||!validEdit(snapshot,edit)){message('The draft changed. Check it again.');return;}
     const expected=snapshot.slice(0,edit.start)+edit.replacement+snapshot.slice(edit.start+edit.length),target=editor;
@@ -64,7 +67,7 @@
   document.addEventListener('focusin',e=>{const next=field(e.target);if(next===editor)return;reset();editor=next;if(editor)schedule();},true);
   document.addEventListener('input',e=>{if(field(e.target)!==editor)return;reset();schedule();},true);
   document.addEventListener('scroll',()=>{hide();draw();},true);window.addEventListener('resize',()=>{hide();draw();});window.addEventListener('blur',()=>{lines.replaceChildren();hide();});window.addEventListener('focus',()=>{draw();schedule();});
-  chrome.runtime.onMessage.addListener((m,_sender,reply)=>{if(m.method==='disableTab'){disabled=true;reset();reply({ok:true});}});
+  chrome.runtime.onMessage.addListener((m,_sender,reply)=>{if(m.method==='preferencesChanged'){reset();schedule();}if(m.method==='disableTab'){disabled=true;reset();reply({ok:true});}});
   globalThis.localWriterResume=()=>{disabled=false;schedule();};
   editor=field(document.activeElement);if(editor)schedule();
 })();

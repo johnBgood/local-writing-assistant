@@ -6,7 +6,7 @@
   const {validEdit} = LocalWriterCore;
   const host = document.createElement('div');
   host.style.cssText = 'all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647';
-  host.dataset.localwriterVersion='0.2.1';
+  host.dataset.localwriterVersion='0.3.0';
   document.documentElement.append(host);
   const root = host.attachShadow({mode:'closed'});
   const style = document.createElement('style');
@@ -63,6 +63,11 @@
     const card=document.createElement(edit?'button':'div');card.className=edit?'card':'status';
     if(edit) {const caption=document.createElement('small');caption.textContent=edit.baseText?'Replace selected text · Same meaning':'Suggested correction';card.append(caption);card.onclick=()=>apply(edit);}
     card.append(document.createTextNode(message));panel.append(card);
+    if(edit && !edit.baseText) {
+      const word=LocalWriterCore.wordAt(snapshot?.text||'',edit.start);
+      if(word) {const add=document.createElement('button');add.className='dismiss';add.textContent='Add “'+word+'” to dictionary';
+        add.onclick=async()=>{try{const result=await chrome.runtime.sendMessage({method:'addWord',text:word});if(!result?.ok)throw Error(result?.error);clear();schedule();}catch(e){notice(e.message);}};panel.append(add);}
+    }
     const dismiss=document.createElement('button');dismiss.className='dismiss';dismiss.textContent='🗑  Dismiss';dismiss.onclick=()=>{cancelSelection();schedule();};panel.append(dismiss);
     panel.addEventListener('mousedown',e=>e.preventDefault());root.append(panel);
     const height=panel.getBoundingClientRect().height;
@@ -215,9 +220,11 @@
   const surface=document.querySelector('.kix-appview-editor');
   if(surface) observer.observe(surface,{subtree:true,childList:true,attributes:true,attributeFilter:['aria-label','transform','width','height']});
   document.addEventListener('scroll',()=>{cancelSelection();draw();schedule();},true);
+  window.addEventListener('focus',()=>{cancelSelection();clear();schedule();});
   window.addEventListener('resize',()=>{cancelSelection();draw();schedule();});
   chrome.runtime.onMessage.addListener((message,_sender,reply)=>{
     if(message.method==='disableTab') {disabled=true;cancelSelection();clear();clearTimeout(timer);reply({ok:true});}
+    if(message.method==='preferencesChanged') {cancelSelection();clear();schedule();}
     if(message.method==='docsStatus') reply({ok:true,status,annotations:read().runs.length,suggestions:edits.length});
   });
   globalThis.localWriterDocs={resume(){disabled=false;snapshot=null;schedule();}};

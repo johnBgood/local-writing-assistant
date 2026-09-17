@@ -26,3 +26,6 @@ assert.equal(preserveSelectionWhitespace('Sentence.\n','Improved sentence.'),'Im
 assert.equal(preserveSelectionWhitespace('  Sentence.\n\n','Better.'),'  Better.\n\n');
 assert.equal(preserveSelectionWhitespace('Sentence.','Better.'),'Better.');
 console.log('PASS: selected paragraph boundaries are preserved during rewrite');
+
+assert.equal(LocalWriterCore.wordAt("She don’t know",4),"don’t");
+assert.equal(LocalWriterCore.wordAt("Übergrößen",2),"Übergrößen");

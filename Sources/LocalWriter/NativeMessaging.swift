@@ -1,4 +1,5 @@
 import Foundation
+import WritingCore
 
 /// Chrome's framed stdin/stdout protocol. No document text is logged or persisted.
 enum NativeMessaging {
@@ -24,6 +25,14 @@ enum NativeMessaging {
                 let request = try JSONDecoder().decode(Request.self, from: data)
                 if request.method == "ping" {
                     response = ["ok": true, "version": 1]
+                } else if ["settings", "setLanguage", "addWord", "removeWord"].contains(request.method) {
+                    if request.method == "setLanguage" {
+                        guard let value = request.text, WritingPreferences.languages.contains(value) else { throw NativeError.invalidText }
+                        try PreferenceStore.update { $0.language = value }
+                    } else if request.method == "addWord" { try PreferenceStore.add(request.text ?? "") }
+                    else if request.method == "removeWord" { try PreferenceStore.update { $0.words.removeAll { $0 == request.text } } }
+                    let prefs = try PreferenceStore.read()
+                    response = ["ok": true, "language": prefs.language, "words": prefs.words]
                 } else {
                     guard let text = request.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf16.count <= 4000 else {
                         throw NativeError.invalidText

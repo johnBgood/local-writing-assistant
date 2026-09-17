@@ -56,3 +56,16 @@ activeTab().then(async tab=>{
   if(!tab.url?.startsWith('https://docs.google.com/document/')) return;
   try {const state=await chrome.tabs.sendMessage(tab.id,{method:'docsStatus'});if(state?.ok) $('status').textContent=state.status;} catch {}
 });
+
+function renderPreferences(settings) {
+  $('language').value=settings.language;
+  $('dictionary-list').replaceChildren();
+  for(const word of settings.words) {
+    const button=document.createElement('button');button.className='secondary';button.textContent='Remove “'+word+'”';
+    button.onclick=async()=>{try{renderPreferences(await request('removeWord',word));}catch(e){$('status').textContent=e.message;}};
+    $('dictionary-list').append(button);
+  }
+}
+request('settings').then(renderPreferences).catch(e=>$('status').textContent=e.message);
+$('language').onchange=async()=>{try{renderPreferences(await request('setLanguage',$('language').value));$('status').textContent='Language updated for the Mac app and Chrome.';}catch(e){$('status').textContent=e.message;}};
+$('add-word').onclick=async()=>{try{renderPreferences(await request('addWord',$('dictionary-word').value.trim()));$('dictionary-word').value='';$('status').textContent='Word added to your shared dictionary.';}catch(e){$('status').textContent=e.message;}};

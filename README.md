@@ -1,6 +1,6 @@
 # LocalWriter
 
-An English writing assistant for macOS 14+, built with Swift and AppKit. **Qwen3 4B handles spelling, grammar, and sentence rewrites locally.** The app does not use macOS spellchecking or autocorrection.
+An English, French and German writing assistant for macOS 14+, built with Swift and AppKit. **Qwen3 4B handles spelling, grammar, and sentence rewrites locally.** The app does not use macOS spellchecking or autocorrection.
 
 ## Installation
 
@@ -44,6 +44,14 @@ scripts/start-model.sh
 ```
 
 The server listens on `127.0.0.1:11434`. The bundled-runtime startup and start script disable cloud features and history. Draft analysis sends the current editor text only to this loopback endpoint; rewrites send the selected sentence. No draft text is written to app logs or storage. Model downloads require internet; inference does not.
+
+## Languages and personal dictionary
+
+The Mac menu **Language** and Chrome popup **Writing language** share one setting: automatic detection, English, Français or Deutsch. Language detection runs locally; corrections and rewrites preserve the original language. Mixed-language passages and very short fragments can be ambiguous.
+
+Click **Add “… ” to dictionary** on a correction card, or use **Personal dictionary** in the Mac menu / Chrome popup to add or remove a word. Accepted words are protected during correction and rewriting; surrounding grammar can still be corrected. Preferences and words are saved locally in `~/Library/Application Support/LocalWriter/preferences.json`, shared by the app and native bridge. Changes take effect on the next check; refocus the browser tab after changing settings in the Mac menu.
+
+`python3 scripts/check-multilingual.py` tests real model corrections and rewrites in all three languages plus dictionary protection with a neighboring grammar error. It temporarily changes language and adds a test word, then restores the previous settings.
 
 ## How corrections work
 
