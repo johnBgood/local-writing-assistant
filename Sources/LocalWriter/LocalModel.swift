@@ -79,23 +79,3 @@ struct LocalModel {
         return rewrite
     }
 }
-
-@MainActor
-final class LocalRuntime {
-    private var process: Process?
-    func start() throws {
-        if process?.isRunning == true { return }
-        let root = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
-        let runtime = root.appendingPathComponent(".local-runtime")
-        let executable = runtime.appendingPathComponent("ollama")
-        guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw LocalModel.ModelError.unavailable }
-        let process = Process(); process.executableURL = executable; process.arguments = ["serve"]
-        var env = ProcessInfo.processInfo.environment
-        env["OLLAMA_MODELS"] = runtime.appendingPathComponent("models").path
-        env["OLLAMA_HOST"] = "127.0.0.1:11434"; env["OLLAMA_NO_CLOUD"] = "1"; env["OLLAMA_NOHISTORY"] = "1"
-        process.environment = env
-        process.standardOutput = FileHandle.nullDevice; process.standardError = FileHandle.nullDevice
-        try process.run(); self.process = process
-    }
-    func stop() { if process?.isRunning == true { process?.terminate() } }
-}

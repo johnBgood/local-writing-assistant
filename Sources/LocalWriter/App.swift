@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var selectionRequested = false
     private var rewriteResult: String?
     private let runtime = LocalRuntime()
+    private var modelStartupTask: Task<Void, Never>?
+    private var modelReady = false
+    private let modelStatus = NSMenuItem(title: "Model: starting…", action: nil, keyEquivalent: "")
     private var analysisTask: Task<Void, Never>?
     private var currentEdits: [TextEdit] = []
     private var analyzedText: String?
@@ -44,12 +47,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         get { status.title }
         set { status.title = newValue; demoStatus?.stringValue = newValue }
     }
-    func applicationWillTerminate(_ notification: Notification) { runtime.stop() }
+    func applicationWillTerminate(_ notification: Notification) { modelStartupTask?.cancel(); runtime.stop() }
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "✎"
-        let menu = NSMenu(); menu.delegate = self; menu.addItem(status); menu.addItem(appStatus)
+        let menu = NSMenu(); menu.delegate = self; menu.addItem(status); menu.addItem(modelStatus); menu.addItem(appStatus)
         menu.addItem(.separator())
         add("Grant Accessibility Access…", #selector(permission), to: menu)
         pauseToggle = add("Pause LocalWriter", #selector(toggle), to: menu)
@@ -74,8 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
-        try? runtime.start()
-        feedback = AXIsProcessTrusted() ? "Ready · Qwen3 · Local" : "Accessibility needed for other apps · Practice editor works"
+        startModel()
         if CommandLine.arguments.contains("--practice") || CommandLine.arguments.contains("--practice-check") || CommandLine.arguments.contains("--selection-check") { demo() }
         if CommandLine.arguments.contains("--practice-check") { runPracticeCheck() }
         if CommandLine.arguments.contains("--selection-check") { runSelectionCheck() }
@@ -209,8 +211,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.runModal()
     }
     @objc func startModel() {
-        do { try runtime.start(); clear(); feedback = "Starting local model…" }
-        catch { feedback = error.localizedDescription }
+        guard modelStartupTask == nil else { return }
+        modelReady = false; clear()
+        modelStatus.title = "Model: starting…"; item.button?.title = "✎ …"
+        feedback = "Starting local model…"
+        modelStartupTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.modelStartupTask = nil }
+            do {
+                try await self.runtime.start { message in
+                    self.modelStatus.title = "Model: " + message
+                    self.feedback = message
+                }
+                self.modelReady = true
+                self.modelStatus.title = "Model: Qwen3 ready · Local"
+                self.item.button?.title = "✎"
+                self.item.button?.toolTip = "LocalWriter · Qwen3 ready"
+                self.feedback = AXIsProcessTrusted() ? "Ready · Qwen3 · Local" : "Accessibility needed for other apps · Practice editor works"
+            } catch is CancellationError { return }
+            catch {
+                self.modelStatus.title = "Model: " + error.localizedDescription
+                self.feedback = error.localizedDescription
+                self.item.button?.title = "✎ !"
+                self.item.button?.toolTip = error.localizedDescription
+            }
+        }
     }
     @objc func checkAgain() { clear(); feedback = "Ready to check again" }
     @objc func quit() { NSApp.terminate(nil) }
@@ -229,7 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc func modelHelp() {
         let alert = NSAlert(); alert.messageText = "Local sentence rewrites"
-        alert.informativeText = "Install Ollama from ollama.com, then run:\n\nollama pull qwen3:4b\n\nKeep Ollama running. LocalWriter connects only to 127.0.0.1:11434. Spelling, grammar, and rewrites all use the local model. The repository includes scripts/setup-model.sh."
+        alert.informativeText = "Install Ollama from ollama.com, then run:\n\nollama pull qwen3:4b\n\nLocalWriter starts Ollama automatically when installed and loads the model at launch. LocalWriter connects only to 127.0.0.1:11434. Spelling, grammar, and rewrites all use the local model. The repository includes scripts/setup-model.sh."
         alert.runModal()
     }
     @objc func demo() {
@@ -271,6 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if let latest = try? PreferenceStore.read(), latest != preferences { preferences = latest; clear() }
         }
         rememberExternalApp()
+        guard modelReady else { return }
         guard !paused else { feedback = "Paused"; return }
         let appID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         guard !(UserDefaults.standard.stringArray(forKey: "excludedApps") ?? []).contains(appID) else { clear(); feedback = "Disabled for \(NSWorkspace.shared.frontmostApplication?.localizedName ?? "this app")"; return }
@@ -534,6 +560,18 @@ struct LocalWriterApp {
                 try? report.write(toFile: CommandLine.arguments[i + 1], atomically: true, encoding: .utf8)
             }
             return
+        }
+        if CommandLine.arguments.contains("--check-runtime") {
+            Task { @MainActor in
+                let runtime = LocalRuntime()
+                do {
+                    try await runtime.start { print($0) }
+                    runtime.stop()
+                    print("PASS: local server available and Qwen3 preloaded")
+                    exit(0)
+                } catch { runtime.stop(); print(error.localizedDescription); exit(1) }
+            }
+            dispatchMain()
         }
         if CommandLine.arguments.contains("--check-model") {
             Task {

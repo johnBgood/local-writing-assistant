@@ -5,19 +5,19 @@ LocalWriter comprend une app de barre de menus pour les éditeurs macOS et une e
 ## Prérequis
 
 - macOS 14 ou plus récent ; Mac Apple Silicon recommandé. Le M3 avec 32 Go convient à cette configuration.
-- Git, Python 3 et les outils de compilation Apple (`xcode-select --install` si nécessaire).
+- Git, Python 3 et les outils de compilation Apple avec Swift 6 ou plus récent (`xcode-select --install` si nécessaire).
 - Google Chrome pour l’extension.
-- Accès au dépôt GitHub privé. Node.js est facultatif, pour les tests JavaScript.
+- Node.js est facultatif, pour les tests JavaScript. Aucun compte GitHub ni clé API payante ne sont nécessaires.
 - [Ollama pour macOS](https://ollama.com/download/mac), installé et lancé. Le premier téléchargement du modèle nécessite Internet.
 
 ## 1. Récupérer le dépôt
 
 ```sh
-git clone git@github.com:johnBgood/local-writing-assistant.git
+git clone https://github.com/johnBgood/local-writing-assistant.git
 cd local-writing-assistant
 ```
 
-Toutes les commandes suivantes sont à exécuter depuis ce dossier. Sur le Mac de développement actuel, le dépôt se trouve dans `/Users/jonathanroques/Documents/ChatGPT/Grammarly`.
+Toutes les commandes suivantes sont à exécuter depuis ce dossier.
 
 ## 2. Installer et démarrer le modèle local
 
@@ -35,7 +35,7 @@ scripts/start-model.sh
 
 Garder ce terminal ouvert. Ne pas démarrer deux serveurs sur le même port. Le serveur attendu est `http://127.0.0.1:11434`.
 
-Le poste de développement possède aussi un runtime et des poids dans `.local-runtime/`. Ils ne sont **pas inclus dans Git**. Sur ce poste, l’app peut démarrer ce runtime via **Start Local Model**. Sur un nouveau Mac, utiliser l’installation Ollama ci-dessus. Garder l’app dans `dist/` pour qu’elle retrouve le runtime du projet.
+Le poste de développement possède aussi un runtime et des poids dans `.local-runtime/`. Ils ne sont **pas inclus dans Git**. Sur ce poste, l’app peut démarrer ce runtime via **Start Local Model**. Sur un nouveau Mac, utiliser l’installation Ollama ci-dessus. Après cette configuration initiale, LocalWriter démarre automatiquement Ollama si nécessaire et précharge Qwen3. Le menu indique la progression ou une erreur ; **✎ !** signale une configuration à terminer. **Start Local Model** permet de réessayer. Quitter LocalWriter arrête uniquement le serveur qu’il a lui-même lancé. Garder l’app dans `dist/` pour qu’elle retrouve le runtime du projet.
 
 ## 3. Construire et lancer l’app Mac
 
@@ -71,7 +71,7 @@ Cette étape crée un certificat et un trousseau locaux ; elle n’ajoute pas de
 
 ## 4. Installer le pont Chrome
 
-Après compilation de l’app :
+Après compilation de l’app, choisir **Install Chrome Bridge… → Install** dans son menu, ou exécuter :
 
 ```sh
 python3 scripts/install-extension-host.py
@@ -176,3 +176,9 @@ Le dernier test utilise le pont installé et le modèle réel. Ces tests ne remp
 ## Désinstaller
 
 Quitter LocalWriter et retirer son entrée d’accessibilité si souhaité. Supprimer l’extension dans `chrome://extensions`, puis supprimer uniquement la déclaration `com.johnbgood.localwriter.json` et le dossier `~/Library/Application Support/LocalWriter/NativeMessaging/` indiqués plus haut. Les modèles Ollama et le dépôt restent sur disque tant qu’ils ne sont pas supprimés séparément.
+
+## Partager avec des testeurs
+
+Après compilation, lancer `python3 scripts/package-testers.py` sur un Mac Apple Silicon. Le dossier `dist/testers/` contient le DMG, le ZIP de l’extension, les instructions et les sommes de contrôle. Le DMG inclut aussi le ZIP et les instructions. Ces fichiers ne sont pas stockés dans Git.
+
+Suivre le [guide pour les testeurs](TESTERS.md) : aucun outil de développement n’est requis, mais Ollama et Qwen3 doivent être installés séparément. L’app bêta n’est pas notariée. L’extension se charge avec **Load unpacked** ; elle n’est pas publiée dans le Chrome Web Store.

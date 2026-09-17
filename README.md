@@ -2,20 +2,63 @@
 
 An English, French and German writing assistant for macOS 14+, built with Swift and AppKit. **Qwen3 4B handles spelling, grammar, and sentence rewrites locally.** The app does not use macOS spellchecking or autocorrection.
 
-## Installation
+## Build and run from source
 
-Voir le [guide complet en français : app Mac, modèle, extension Chrome, mises à jour et dépannage](docs/INSTALLATION.fr.md).
+Requirements: **macOS 14+**, a **Swift 6 or newer toolchain** (recent Xcode Command Line Tools), Git and Python 3. Apple Silicon is the tested platform. Node.js is optional for extension tests. Install the Apple tools with `xcode-select --install` if needed; check your toolchain with `swift --version`.
 
-## Tester distribution
+1. Install [Ollama for macOS](https://ollama.com/download/mac) and launch it.
+2. Clone the repository and download the local model:
 
-See [tester installation instructions](docs/TESTERS.md). Build the app, then run `python3 scripts/package-testers.py` to create the Apple Silicon beta DMG and Chrome ZIP under `dist/testers/`. The current beta is ad-hoc-signed and **not notarized**; Ollama/Qwen3 must be installed separately. Testers can install the native bridge using the app menu without a checkout or Python.
+   ```sh
+   git clone https://github.com/johnBgood/local-writing-assistant.git
+   cd local-writing-assistant
+   scripts/setup-model.sh
+   ```
 
-## Run
+3. Build and launch the menu-bar app:
+
+   ```sh
+   scripts/build-app.sh
+   open dist/LocalWriter.app
+   ```
+
+After this one-time setup, LocalWriter automatically starts Ollama if needed and preloads Qwen3 when the app opens. The menu shows startup progress or a setup error; **✎ !** means the model needs attention. The first model download needs Internet and several gigabytes of disk space; model weights are not included in the repository. No paid API key is required. Run subsequent commands from the repository root.
+
+LocalWriter appears as **✎** in the menu bar. To open its practice editor, use **Open Practice Editor**, or launch it with:
+
+```sh
+open dist/LocalWriter.app --args --practice
+```
+
+Voir aussi le [guide complet en français](docs/INSTALLATION.fr.md).
+
+## Install the Chrome extension from source
+
+The extension needs no npm install or JavaScript build step.
+
+1. Build the Mac app above, then choose **✎ → Install Chrome Bridge… → Install**. Alternatively, run `python3 scripts/install-extension-host.py` from the repository root.
+2. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select the repository's **extension** folder. Keep that folder on disk.
+3. Open LocalWriter from Chrome's Extensions menu and check for **Connected to LocalWriter on your Mac**. Keep LocalWriter open when it manages the model server.
+4. Choose **Open practice editors** to test a correction and replacement.
+5. Click **Enable automatically on websites** and accept Chrome's website-access request to enable checking across tabs. You can exclude individual sites using **Disable for [site]**, or use manual activation instead.
+6. In the Mac app menu, select **Disable for Google Chrome** to avoid duplicate native and extension underlines.
+
+The bridge is installed in your user Application Support folder and allows only this extension's stable ID. It does not need an administrator password. Google Docs support is experimental. See [extension details and limitations](extension/README.md).
+
+## Share a beta with testers
+
+See [tester installation instructions](docs/TESTERS.md) for installing the app and unpacked Chrome extension without developer tools. To generate the shareable files yourself:
 
 ```sh
 scripts/build-app.sh
-open dist/LocalWriter.app --args --practice
+python3 scripts/package-testers.py
 ```
+
+Packaging is intended for an Apple Silicon Mac. Output in `dist/testers/` includes an Apple Silicon DMG, an extension ZIP, `START-HERE.md` and `SHA256SUMS.txt`. Send testers the DMG (which also contains the extension ZIP and instructions), or share the ZIP separately. These files are generated locally; they are not committed to Git.
+
+The beta is ad-hoc-signed and **not notarized**. Ollama/Qwen3 must be installed separately. The Chrome extension is distributed unpacked and is not published in the Chrome Web Store.
+
+## Using the app
 
 The practice editor uses the same debounce, model analysis, underline overlay, hover panel, and acceptance workflow as external editors. It does not require macOS Accessibility permission. Its status line shows model progress and actionable failures. Hover a red underline to accept a correction; hover a sentence to request a rewrite.
 
@@ -25,29 +68,37 @@ The menu shows **Disable for Codex** when enabled and **Enable for Codex** when 
 
 ### Development signing
 
-This workspace now uses a persistent local signing certificate. Fresh clones without that identity fall back to ad-hoc signing; macOS can invalidate their existing Accessibility grant when the binary changes. A checked box for an older build does not prove the rebuilt app is trusted. Remove the old LocalWriter entry and add the rebuilt app if its diagnostics report missing access. A stable signing identity is needed for a smoother update experience.
+Fresh clones use ad-hoc signing. A rebuild can invalidate the previous macOS Accessibility grant. If diagnostics report missing access despite a checked box, quit LocalWriter, remove its old Accessibility entry, and add the current app.
 
-An optional project-local signing setup is prepared in `scripts/sign-app.py`. It creates a private certificate and keychain only with an explicitly approved `--setup` invocation. It does not add a trusted root certificate. The keychain is locked after use; `.local-signing/` is ignored by Git. After setup, builds reuse a certificate-pinned identity and do not silently fall back to ad-hoc signing. Setup is installed on this development machine. `python3 scripts/check-signing.py` verifies that two distinct builds have different code hashes but the same certificate-pinned identity.
-
-The confirmed failure was macOS TCC retaining a requirement for an older code hash while the running build had a different hash. After choosing the final signing identity, reset only this app's stale entry with `tccutil reset Accessibility com.johnbgood.localwriter`, then grant the current app access once. Resetting this entry revokes its existing grant; it does not grant access automatically.
-
-## Model setup
-
-This development workspace contains the official Ollama runtime and Qwen3 4B weights in `.local-runtime/`, ignored by Git. The app automatically starts that project-local runtime when available. **Start Local Model** starts it again; **Check Again** retries analysis. The app must remain in `dist/` for automatic discovery of the project-local runtime.
-
-Alternatively, install [Ollama](https://ollama.com/download/mac), launch it, then run:
+For a stable local development identity, optionally run this after your first build:
 
 ```sh
-scripts/setup-model.sh
+python3 scripts/sign-app.py dist/LocalWriter.app --setup
+scripts/build-app.sh
 ```
 
-To run the project-local server manually:
+This creates a private local certificate and keychain in the Git-ignored `.local-signing/` directory; it does not install a trusted root certificate or provide Apple Developer ID signing/notarization. Subsequent builds reuse that identity. Grant Accessibility access to the final app. `python3 scripts/check-signing.py` verifies identity stability across two builds.
+
+## Model and privacy
+
+Ollama serves `qwen3:4b` at `127.0.0.1:11434`. If the Ollama app is not running, you can start the server in a terminal with `scripts/start-model.sh`; keep that terminal open. Do not start a second server on the same port.
+
+An optional project-local runtime in `.local-runtime/` is supported, but is not included in Git or required by the source setup above. At launch, LocalWriter first reuses an existing server, otherwise starts the project-local runtime or an installed Ollama CLI (Applications, Homebrew or PATH). It checks that Qwen3 is downloaded and preloads it. **Start Local Model** retries after a setup error. Closing LocalWriter stops only the server it started; independently running Ollama is left alone. Keep LocalWriter open when the Chrome extension relies on its server. Automatic discovery of the project-local runtime requires keeping the app in `dist/`.
+
+Draft analysis sends editor text to the loopback endpoint; rewrites send the selected text. Drafts are not written to app logs or persistent storage. Model downloads require Internet; inference does not. Signing material, model weights and build artifacts are excluded from Git.
+
+## Update a source installation
+
+Quit LocalWriter, then run:
 
 ```sh
-scripts/start-model.sh
+git pull --ff-only
+scripts/build-app.sh
+python3 scripts/install-extension-host.py
+open dist/LocalWriter.app
 ```
 
-The server listens on `127.0.0.1:11434`. The bundled-runtime startup and start script disable cloud features and history. Draft analysis sends the current editor text only to this loopback endpoint; rewrites send the selected sentence. No draft text is written to app logs or storage. Model downloads require internet; inference does not.
+If you do not use Chrome, skip the bridge installation command. Otherwise, click **Reload** on LocalWriter's card in `chrome://extensions` and reload open editor tabs. The bridge uses an installed copy of the binary, so reinstall it after rebuilding. Automatic activation resumes on permitted sites; manually enabled tabs need reactivation.
 
 ## Languages and personal dictionary
 
@@ -71,25 +122,27 @@ The practice editor applies edits through NSTextView with undo support. External
 
 ## Limits
 
-- Chrome's standard textarea and Slack's rich composer have been verified with a live model correction and precise word coordinates. Slack correction acceptance and Codex compatibility still need verification. Detection, word coordinates, and selected-text replacement depend on what each editor exposes.
+- Chrome's standard textarea and Slack's rich composer have been verified with a live model correction and precise word coordinates. Codex compatibility still needs verification. Detection, word coordinates, and selected-text replacement depend on what each editor exposes.
 - Missing permissions, unreadable fields, missing word coordinates, model failures, and disabled apps are reported in the menu instead of silently appearing to work.
 - External drafts are limited to 4,000 UTF-16 code units. Sentence hover uses individual word positions across lines; editors must expose accurate range geometry.
 - Model suggestions are fallible and are applied only when explicitly accepted.
 - Native Google Docs canvas integration is unavailable; the Chrome companion has an experimental separate adapter.
-- No launch-at-login registration, installer, notarization, or automatic model-download UI yet.
+- No launch-at-login registration, notarization, or automatic model-download UI yet.
 
 ## Development and checks
 
-No third-party Swift dependencies. Command Line Tools are sufficient.
+No third-party Swift dependencies. Command Line Tools with Swift 6 or newer are sufficient. Core checks run without the model; model/editor checks require Ollama and Qwen3.
 
 ```sh
 scripts/check.sh
+scripts/check-runtime.sh
 scripts/build-app.sh
 dist/LocalWriter.app/Contents/MacOS/LocalWriter --check-model
 dist/LocalWriter.app/Contents/MacOS/LocalWriter --check-editor
 dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 ```
 
+- `scripts/check-runtime.sh`: isolated startup, server reuse, missing model/installation and warmup failure checks. `dist/LocalWriter.app/Contents/MacOS/LocalWriter --check-runtime` verifies startup and preload against the real local installation.
 - `CoreChecks`: Unicode ranges, stale edits, word differences including insertions and deletions, and app enable/disable states.
 - `--check-editor`: real-model spelling and grammar, native word coordinates, overlay visibility, acceptance, and stale-edit rejection.
 - `--practice-check`: opens a synthetic practice draft and exercises the running background loop, checks rendered red underline pixels, and accepts a correction. Requires the local model server; closes the test app afterward.

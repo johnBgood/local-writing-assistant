@@ -4,6 +4,8 @@ This Manifest V3 extension uses the same Qwen3 client and UTF-16 corrections as 
 
 ## Install
 
+For a fresh Mac, start with the [source build and model setup](../README.md#build-and-run-from-source). To install a shared ZIP without developer tools, see the [tester guide](../docs/TESTERS.md).
+
 Pour toutes les étapes sur un nouveau Mac et la procédure de mise à jour, voir le [guide d’installation en français](../docs/INSTALLATION.fr.md).
 
 1. Build the app with `scripts/build-app.sh`. Keep LocalWriter and its local model running.

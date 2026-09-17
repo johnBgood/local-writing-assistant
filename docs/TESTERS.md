@@ -2,12 +2,16 @@
 
 This beta supports **Apple Silicon Macs (M1/M2/M3/M4), macOS 14 or later**. The included app is arm64; it does not run on Intel Macs. It checks English, French and German locally using Qwen3 4B. No Git checkout, Python, Xcode or Apple developer tools are needed.
 
+Want to build it yourself instead? See the [source setup in the README](https://github.com/johnBgood/local-writing-assistant#build-and-run-from-source).
+
 ## What to download
+
+Ask the person sharing the beta for these files, or generate them with the [packaging instructions](https://github.com/johnBgood/local-writing-assistant#share-a-beta-with-testers). They are not stored in Git.
 
 - `LocalWriter-0.4.0-arm64-beta.dmg`: the Mac app, these instructions and the extension ZIP.
 - `LocalWriter-Chrome-0.4.0.zip`: also available separately for convenience.
 
-This is a **ad-hoc-signed, unnotarized beta**, not a production-signed release. macOS may block the first launch. If you trust the sender and intended to install this beta, Apple's documented process is to try opening it, then use **System Settings → Privacy & Security → Open Anyway**. Managed Macs may not permit this. Do not disable Gatekeeper or install a root certificate. See https://support.apple.com/en-us/102445.
+This is an **ad-hoc-signed, unnotarized beta**, not a production-signed release. macOS may block the first launch. If you trust the sender and intended to install this beta, Apple's documented process is to try opening it, then use **System Settings → Privacy & Security → Open Anyway**. Managed Macs may not permit this. Do not disable Gatekeeper or install a root certificate. See https://support.apple.com/en-us/102445.
 
 ## 1. Install the local model
 
@@ -18,7 +22,7 @@ This is a **ad-hoc-signed, unnotarized beta**, not a production-signed release. 
    ollama pull qwen3:4b
    ```
 
-3. Leave Ollama running while using LocalWriter. The initial model download needs Internet and several gigabytes of disk space; the model is **not bundled in the DMG**. Subsequent analysis runs on this Mac via `127.0.0.1:11434`.
+3. After the initial setup, LocalWriter starts Ollama automatically if needed and preloads Qwen3. The initial model download needs Internet and several gigabytes of disk space; the model is **not bundled in the DMG**. Subsequent analysis runs on this Mac via `127.0.0.1:11434`.
 
 ## 2. Install the Mac app
 
@@ -28,7 +32,7 @@ This is a **ad-hoc-signed, unnotarized beta**, not a production-signed release. 
 4. Choose **Grant Accessibility Access…** and enable LocalWriter in **System Settings → Privacy & Security → Accessibility** for Slack, Notes and other native editors.
 5. Choose **Open Practice Editor** and try `This is a speling mistake.` Click the suggestion to replace the word. Select a phrase to request a whole-phrase rewrite.
 
-The app's **Start Local Model** action currently starts the repository-local runtime used by the developer. On a tester installation, launch the separate **Ollama app** as described above.
+At launch, the menu displays **Starting Ollama…**, **Loading Qwen3…**, then **Model: Qwen3 ready · Local**. A **✎ !** icon means setup needs attention; open the menu for the reason and use **Start Local Model** to retry. Keep LocalWriter open while using the extension if it started the server. Quitting it stops only its own server, leaving any independently running Ollama instance alone.
 
 ## 3. Connect and install the Chrome extension
 
@@ -69,7 +73,7 @@ When reporting a problem, include app/extension version, macOS version, editor/b
 
 ## Troubleshooting and removal
 
-- **Model unavailable:** launch Ollama and make sure `ollama pull qwen3:4b` completed.
+- **Model unavailable:** check the model-status row, make sure `ollama pull qwen3:4b` completed, then choose **Start Local Model**.
 - **Native host exited / not found:** rerun **Install Chrome Bridge…** from the installed app. Keep the bridge in Application Support.
 - **Accessibility checked but not working:** quit the app, remove its stale Accessibility entry and add the current Applications copy. Do not grant access to an old copy on the DMG.
 - **Old behavior after update:** reload both the extension and the document.
