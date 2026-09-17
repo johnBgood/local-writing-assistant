@@ -96,6 +96,18 @@ Seule l’extension LocalWriter, d’identifiant `pkcahnmnafkepdcfepmbnboaadnbkh
 
 Le modèle doit rester en fonctionnement. Dans le menu de l’app Mac, choisir **Disable for Google Chrome** pour éviter les doubles soulignements avec l’extension. Les autres apps restent disponibles.
 
+## Activation automatique (extension 0.4.0)
+
+Pour éviter d’activer chaque onglet :
+
+1. Après la mise à jour, recharger **LocalWriter** dans `chrome://extensions`.
+2. Ouvrir son popup et cliquer sur **Enable automatically on websites**.
+3. Accepter la demande Chrome d’accès aux sites HTTP/HTTPS. Cela autorise LocalWriter à lire les champs de texte pour les analyser localement.
+
+L’activation est mémorisée, fonctionne dans les nouveaux onglets et après actualisation ou redémarrage de Chrome. Les pages déjà ouvertes sont également activées si Chrome en autorise l’accès. Les pages internes de Chrome restent exclues.
+
+Le bouton **Disable for [site]** mémorise une exclusion pour le site courant ; **Enable for [site]** le réactive. **Turn off automatic checking** coupe l’analyse et le démarrage automatique. Si l’autorisation est refusée, le mode manuel par onglet reste disponible.
+
 ## 6. Utiliser Google Docs
 
 1. Ouvrir le document.
@@ -104,7 +116,7 @@ Le modèle doit rester en fonctionnement. Dans le menu de l’app Mac, choisir *
 4. Cliquer sur un soulignement puis sur la correction pour l’accepter.
 5. Sélectionner une phrase, avec la souris ou le clavier, et patienter pour voir sa reformulation. Cliquer sur la carte pour remplacer la sélection entière.
 
-L’activation vaut pour l’onglet jusqu’à son actualisation. Après actualisation, il faut réactiver LocalWriter. L’adaptateur Google Docs est expérimental : il analyse le texte visible, jusqu’à 4 000 unités UTF-16. Une sélection répétée ou partiellement hors écran peut être refusée pour éviter de modifier le mauvais passage. Si les annotations de texte de Docs sont absentes, utiliser la vérification de sélection dans le popup avec copie manuelle.
+En mode manuel, l’activation vaut pour l’onglet jusqu’à son actualisation. En mode automatique, LocalWriter se réactive seul. L’adaptateur Google Docs est expérimental : il analyse le texte visible, jusqu’à 4 000 unités UTF-16. Une sélection répétée ou partiellement hors écran peut être refusée pour éviter de modifier le mauvais passage. Si les annotations de texte de Docs sont absentes, utiliser la vérification de sélection dans le popup avec copie manuelle.
 
 ## Langues et dictionnaire personnel
 
@@ -136,7 +148,7 @@ Puis dans Chrome :
 1. Aller dans `chrome://extensions` et cliquer sur **Recharger sur la carte LocalWriter**.
 2. Vérifier la version affichée sur cette carte.
 3. **Actualiser aussi le Google Doc ou la page web** : recharger l’extension seul ne retire pas nécessairement le script déjà injecté dans l’onglet.
-4. Réouvrir le popup LocalWriter et réactiver **Enable underlines on this tab**.
+4. En mode manuel, réouvrir le popup LocalWriter et réactiver **Enable underlines on this tab**. En mode automatique, vérifier que le site n’est pas exclu.
 
 Si seuls les fichiers de l’extension ont changé, la recompilation Swift et la réinstallation du pont ne sont pas nécessaires. Si l’app ou le pont a changé, relancer le script d’installation : Chrome utilise une copie installée du binaire.
 

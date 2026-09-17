@@ -1,3 +1,4 @@
+importScripts('activation.js');
 const HOST = 'com.johnbgood.localwriter';
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => chrome.contextMenus.create({id:'check', title:'Check with LocalWriter', contexts:['selection']}));

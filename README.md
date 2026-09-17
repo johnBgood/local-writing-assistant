@@ -98,4 +98,4 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 
 ## Chrome extension (local prototype)
 
-The `extension/` directory contains an unpacked Manifest V3 companion using the same local Qwen3 model via a narrowly scoped native messaging host. Standard browser fields have inline corrections; Google Docs has an experimental visible-text adapter plus selection checking and copy-back. See [extension setup and limitations](extension/README.md).
+The `extension/` directory contains an unpacked Manifest V3 companion using the same local Qwen3 model via a narrowly scoped native messaging host. Standard browser fields have inline corrections; Google Docs has an experimental visible-text adapter plus selection checking and copy-back. Automatic activation is available with optional website permission, and individual sites can be excluded. See [extension setup and limitations](extension/README.md).

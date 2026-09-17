@@ -2,6 +2,9 @@
 <link rel="stylesheet" href="popup.css">
 <header><span class="logo">✎</span><div><h1>LocalWriter</h1><p>EN · FR · DE · On your Mac</p></div></header>
 <p id="connection" role="status">Connecting to LocalWriter…</p>
+<button id="automatic">Enable automatically on websites</button>
+<p id="automatic-status" role="status"></p>
+<button id="site-toggle" class="secondary" hidden></button>
 <button id="enable">Enable underlines on this tab</button>
 <button id="disable" class="secondary">Disable underlines on this tab</button>
 <button id="selection" class="secondary">Use selected text</button>
@@ -13,6 +16,6 @@
 <div class="actions"><button id="check">Check text</button><button id="rewrite" class="secondary">Improve wording</button></div>
 <p id="status" role="status" aria-live="polite"></p><div id="results"></div>
 <button id="copy" class="secondary" hidden>Copy improved text</button>
-<p class="footnote">Suggestions are processed locally. Nothing is sent when you merely open this panel.</p>
+<p class="footnote">Suggestions are processed locally. Automatic checking runs only after you enable website access. Text stays on your Mac.</p>
 <p><a href="practice.html" target="_blank">Open practice editors</a></p>
 <script src="core.js"></script><script src="popup.js"></script></html>

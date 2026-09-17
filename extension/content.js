@@ -29,7 +29,7 @@
     }else{const r=domRange(editor,start,length);if(r)rects=[...r.getClientRects()];}
     return rects.map(r=>({left:Math.max(r.left,bounds.left),right:Math.min(r.right,bounds.right),top:Math.max(r.top,bounds.top),bottom:Math.min(r.bottom,bounds.bottom)})).filter(r=>r.right>r.left&&r.bottom>r.top);
   }
-  function draw(){lines.replaceChildren();if(!editor||text(editor)!==snapshot)return;
+  function draw(){lines.replaceChildren();if(disabled||!editor||text(editor)!==snapshot)return;
     for(const edit of edits){if(!validEdit(snapshot,edit))continue;
       for(const match of snapshot.slice(edit.start,edit.start+edit.length).matchAll(/\S+/gu))for(const r of boxes(edit.start+match.index,match[0].length)){
         const line=document.createElement('div');line.className='line';line.style.cssText=`left:${r.left}px;top:${r.bottom-3}px;width:${r.right-r.left}px;height:6px`;
@@ -57,7 +57,7 @@
   }
   function schedule(){clearTimeout(timer);if(!disabled)timer=setTimeout(check,700);}
   async function check(){
-    if(busy){pending=true;return;}if(!editor||!document.hasFocus())return;
+    if(disabled)return;if(busy){pending=true;return;}if(!editor||!document.hasFocus())return;
     const target=editor,value=text(target);if(!value.trim()||value.length>4000){if(value.length>4000)message('This field is over 4,000 characters. Check a selection in the extension panel.');return;}
     const run=sequence;snapshot=value;busy=true;
     try{const r=await request('analyze',value);if(run===sequence&&target===editor&&text(target)===value&&document.hasFocus()){edits=r.edits;draw();}}

@@ -6,7 +6,7 @@
   const {validEdit} = LocalWriterCore;
   const host = document.createElement('div');
   host.style.cssText = 'all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647';
-  host.dataset.localwriterVersion='0.3.0';
+  host.dataset.localwriterVersion='0.4.0';
   document.documentElement.append(host);
   const root = host.attachShadow({mode:'closed'});
   const style = document.createElement('style');
@@ -90,7 +90,7 @@
   }
   function schedule() {clearTimeout(timer);if(!disabled && !applying) timer=setTimeout(check,800);}
   async function check() {
-    if(disabled || applying || selectionActive) return;
+    if(disabled || applying || selectionActive || document.visibilityState==='hidden' || !document.hasFocus()) return;
     if(busy) {pending=true;return;}
     const value=read();
     if(!value.text.trim()) {status='Google Docs has not exposed its text annotations. Inline checking is unavailable in this document.';return;}
@@ -217,7 +217,7 @@
     const current=read();
     if(current.text!==snapshot?.text) {cancelSelection();clear();schedule();} else draw();
   });
-  const surface=document.querySelector('.kix-appview-editor');
+  const surface=document.querySelector('.kix-appview-editor') || document.body;
   if(surface) observer.observe(surface,{subtree:true,childList:true,attributes:true,attributeFilter:['aria-label','transform','width','height']});
   document.addEventListener('scroll',()=>{cancelSelection();draw();schedule();},true);
   window.addEventListener('focus',()=>{cancelSelection();clear();schedule();});
@@ -228,6 +228,5 @@
     if(message.method==='docsStatus') reply({ok:true,status,annotations:read().runs.length,suggestions:edits.length});
   });
   globalThis.localWriterDocs={resume(){disabled=false;snapshot=null;schedule();}};
-  if(!read().text) notice('Google Docs has not exposed its text annotations. Inline checking is unavailable in this document.');
   schedule();
 })();
