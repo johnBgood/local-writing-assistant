@@ -6,6 +6,10 @@ An English, French and German writing assistant for macOS 14+, built with Swift 
 
 Voir le [guide complet en français : app Mac, modèle, extension Chrome, mises à jour et dépannage](docs/INSTALLATION.fr.md).
 
+## Tester distribution
+
+See [tester installation instructions](docs/TESTERS.md). Build the app, then run `python3 scripts/package-testers.py` to create the Apple Silicon beta DMG and Chrome ZIP under `dist/testers/`. The current beta is ad-hoc-signed and **not notarized**; Ollama/Qwen3 must be installed separately. Testers can install the native bridge using the app menu without a checkout or Python.
+
 ## Run
 
 ```sh

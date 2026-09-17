@@ -58,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add("Open Practice Editor", #selector(demo), to: menu)
         add("Start Local Model", #selector(startModel), to: menu)
         add("Check Again", #selector(checkAgain), to: menu)
+        add("Install Chrome Bridge…", #selector(installChromeBridge), to: menu)
         add("Model Setup Instructions", #selector(modelHelp), to: menu)
         let languageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: ""); languageItem.submenu = languageMenu; menu.addItem(languageItem)
         let dictionaryItem = NSMenuItem(title: "Personal dictionary", action: nil, keyEquivalent: ""); dictionaryItem.submenu = dictionaryMenu; menu.addItem(dictionaryItem)
@@ -213,6 +214,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc func checkAgain() { clear(); feedback = "Ready to check again" }
     @objc func quit() { NSApp.terminate(nil) }
+    @objc func installChromeBridge() {
+        let alert = NSAlert(); alert.messageText = "Connect the LocalWriter Chrome extension"
+        alert.informativeText = "Install a local bridge in your Application Support folder. Only the LocalWriter extension can launch it to use the model and shared dictionary on this Mac. Run this again after updating the app."
+        alert.addButton(withTitle: "Install"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn, let executable = Bundle.main.executableURL else { return }
+        do {
+            _ = try ChromeBridgeInstaller.install(executable: executable)
+            feedback = "Chrome bridge installed"
+            let done = NSAlert(); done.messageText = "Chrome bridge installed"
+            done.informativeText = "Load the LocalWriter extension in Chrome, then open its popup to check the connection. Keep Ollama running with qwen3:4b installed."
+            done.runModal()
+        } catch { feedback = error.localizedDescription; NSAlert(error: error).runModal() }
+    }
     @objc func modelHelp() {
         let alert = NSAlert(); alert.messageText = "Local sentence rewrites"
         alert.informativeText = "Install Ollama from ollama.com, then run:\n\nollama pull qwen3:4b\n\nKeep Ollama running. LocalWriter connects only to 127.0.0.1:11434. Spelling, grammar, and rewrites all use the local model. The repository includes scripts/setup-model.sh."
@@ -392,6 +406,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 @main
 struct LocalWriterApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--check-bridge-installer") {
+            let home = FileManager.default.temporaryDirectory.appendingPathComponent("localwriter-test-'space-" + UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: home) }
+            do {
+                let manifest = try ChromeBridgeInstaller.install(executable: Bundle.main.executableURL!, home: home)
+                _ = try ChromeBridgeInstaller.install(executable: Bundle.main.executableURL!, home: home)
+                let value = try JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as! [String: Any]
+                precondition(value["allowed_origins"] as? [String] == ["chrome-extension://\(ChromeBridgeInstaller.extensionID)/"])
+                let process = Process(); process.executableURL = URL(fileURLWithPath: value["path"] as! String)
+                let input = Pipe(), output = Pipe(); process.standardInput = input; process.standardOutput = output
+                try process.run()
+                let request = Data("{\"method\":\"ping\"}".utf8); var size = UInt32(request.count).littleEndian
+                input.fileHandleForWriting.write(Data(bytes: &size, count: 4)); input.fileHandleForWriting.write(request); try input.fileHandleForWriting.close()
+                let result = output.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()
+                precondition(process.terminationStatus == 0 && result.count > 4)
+                let reply = try JSONSerialization.jsonObject(with: result.dropFirst(4)) as! [String: Any]
+                precondition(reply["ok"] as? Bool == true)
+                print("PASS: portable bridge install, update, quoted paths and native ping")
+            } catch { print("FAIL: \(error)"); exit(1) }
+            return
+        }
         if CommandLine.arguments.contains("--native-messaging") { NativeMessaging.run(); return }
         if CommandLine.arguments.contains("--render-popup") {
             _ = NSApplication.shared
