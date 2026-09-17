@@ -97,6 +97,9 @@ final class Overlay {
     }
     func hide() { view.highlightedSentence = nil; window.orderOut(nil); popover.orderOut(nil) }
     func show(mark: Mark, message: String? = nil, replacement: String? = nil) {
+        // Keep the clicked area under the pointer while an asynchronous rewrite loads.
+        // Shrinking the card here lets the hover timeout discard the first response.
+        let previousHeight = popover.isVisible && anchoredRange == mark.range ? popover.frame.height : 0
         if !popover.isVisible || anchoredRange != mark.range {
             anchorX = NSEvent.mouseLocation.x - 20
             anchoredRange = mark.range
@@ -151,7 +154,8 @@ final class Overlay {
             stack.widthAnchor.constraint(equalToConstant: 350)
         ])
         popover.contentView = content
-        let size = stack.fittingSize
+        var size = stack.fittingSize
+        size.height = max(size.height, previousHeight)
         let screen = NSScreen.screens.first(where: { $0.frame.intersects(mark.rect) })?.visibleFrame ?? NSScreen.main!.visibleFrame
         let x = min(max(anchorX ?? mark.rect.minX, screen.minX), screen.maxX - 350)
         let above = mark.rect.maxY + 4
