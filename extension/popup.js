@@ -1,3 +1,4 @@
+if(location.search.includes('review=1')) document.documentElement.classList.add('review');
 let output = '';
 const $ = id => document.getElementById(id);
 const request = async (method,text) => {
