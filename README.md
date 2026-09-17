@@ -2,6 +2,22 @@
 
 An English, French and German writing assistant for macOS 14+, built with Swift and AppKit. **Qwen3 4B handles spelling, grammar, and sentence rewrites locally.** The app does not use macOS spellchecking or autocorrection.
 
+## Download and install — no build required
+
+**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-0.4.0-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-Chrome-0.4.0.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
+
+The beta requires **an Apple Silicon Mac and macOS 14+**. No Git, Xcode, Python or compilation is needed.
+
+1. Install [Ollama](https://ollama.com/download/mac), launch it once and run `ollama pull qwen3:4b` in Terminal. This one-time model download is separate from the app.
+2. Open the DMG, drag **LocalWriter.app** into **Applications**, and launch it. The app starts Ollama and loads the model automatically on subsequent launches.
+3. In the **✎** menu, choose **Grant Accessibility Access…** for native apps. Use **Open Practice Editor** to try a correction.
+4. For Chrome, choose **Install Chrome Bridge… → Install** in the Mac app. Extract the extension ZIP into a permanent folder, open `chrome://extensions`, enable **Developer mode**, and use **Load unpacked** to select that folder.
+5. Open the extension and choose **Enable automatically on websites**. In the Mac app, **Disable for Google Chrome** avoids duplicate underlines.
+
+This beta is **not notarized**: macOS may require **System Settings → Privacy & Security → Open Anyway** after the first launch attempt. The Chrome extension is installed unpacked, not through the Chrome Web Store. The DMG also includes the extension ZIP and setup guide.
+
+See the [full installation and troubleshooting guide](docs/TESTERS.md), or [instructions en français](docs/INSTALLATION.fr.md). Source-build instructions below are optional.
+
 ## Build and run from source
 
 Requirements: **macOS 14+**, a **Swift 6 or newer toolchain** (recent Xcode Command Line Tools), Git and Python 3. Apple Silicon is the tested platform. Node.js is optional for extension tests. Install the Apple tools with `xcode-select --install` if needed; check your toolchain with `swift --version`.
@@ -47,14 +63,14 @@ The bridge is installed in your user Application Support folder and allows only 
 
 ## Share a beta with testers
 
-See [tester installation instructions](docs/TESTERS.md) for installing the app and unpacked Chrome extension without developer tools. To generate the shareable files yourself:
+Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.0) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
 
 ```sh
 scripts/build-app.sh
 python3 scripts/package-testers.py
 ```
 
-Packaging is intended for an Apple Silicon Mac. Output in `dist/testers/` includes an Apple Silicon DMG, an extension ZIP, `START-HERE.md` and `SHA256SUMS.txt`. Send testers the DMG (which also contains the extension ZIP and instructions), or share the ZIP separately. These files are generated locally; they are not committed to Git.
+Packaging is intended for an Apple Silicon Mac. Output in `dist/testers/` includes an Apple Silicon DMG, an extension ZIP, `START-HERE.md` and `SHA256SUMS.txt`. Send testers the DMG (which also contains the extension ZIP and instructions), or share the ZIP separately. Release downloads are hosted as GitHub release assets, keeping binaries out of the source history.
 
 The beta is ad-hoc-signed and **not notarized**. Ollama/Qwen3 must be installed separately. The Chrome extension is distributed unpacked and is not published in the Chrome Web Store.
 

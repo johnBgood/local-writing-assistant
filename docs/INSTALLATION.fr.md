@@ -2,6 +2,21 @@
 
 LocalWriter comprend une app de barre de menus pour les éditeurs macOS et une extension Chrome pour les pages web, dont Google Docs. Les deux utilisent Qwen3 4B sur le Mac. Le modèle traite les textes en anglais, français et allemand.
 
+## Installation sans compilation (recommandée)
+
+Télécharger l’[app Mac en DMG](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-0.4.0-arm64-beta.dmg) et l’[extension Chrome en ZIP](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-Chrome-0.4.0.zip) depuis la [version GitHub](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.0). Mac Apple Silicon et macOS 14+ requis ; aucun besoin de Git, Python ou Xcode.
+
+1. Installer [Ollama](https://ollama.com/download/mac), le lancer une fois, puis exécuter `ollama pull qwen3:4b` dans Terminal. Le modèle nécessite un téléchargement initial séparé.
+2. Ouvrir le DMG, glisser **LocalWriter.app** dans **Applications**, puis lancer l’app. Elle démarre ensuite automatiquement le serveur local et charge le modèle.
+3. Autoriser l’accessibilité via **✎ → Grant Accessibility Access…** pour les apps natives.
+4. Choisir **Install Chrome Bridge… → Install** dans le menu Mac.
+5. Extraire le ZIP dans un dossier permanent, ouvrir `chrome://extensions`, activer **Mode développeur**, puis **Charger l’extension non empaquetée** et choisir ce dossier.
+6. Activer **Enable automatically on websites** dans le popup de l’extension. Désactiver l’analyse native pour Chrome afin d’éviter les doubles soulignements.
+
+Cette bêta n’est pas notariée : après une première tentative d’ouverture, macOS peut nécessiter **Réglages Système → Confidentialité et sécurité → Ouvrir quand même**. Le DMG inclut aussi le ZIP et les instructions. Voir le [guide complet pour les testeurs](TESTERS.md) pour le dépannage et les mises à jour.
+
+Les étapes suivantes concernent uniquement la compilation depuis les sources.
+
 ## Prérequis
 
 - macOS 14 ou plus récent ; Mac Apple Silicon recommandé. Le M3 avec 32 Go convient à cette configuration.

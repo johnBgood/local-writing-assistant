@@ -6,10 +6,10 @@ Want to build it yourself instead? See the [source setup in the README](https://
 
 ## What to download
 
-Ask the person sharing the beta for these files, or generate them with the [packaging instructions](https://github.com/johnBgood/local-writing-assistant#share-a-beta-with-testers). They are not stored in Git.
+Download these ready-to-install files from the [GitHub release](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.0). You do not need to clone or build the repository.
 
-- `LocalWriter-0.4.0-arm64-beta.dmg`: the Mac app, these instructions and the extension ZIP.
-- `LocalWriter-Chrome-0.4.0.zip`: also available separately for convenience.
+- [LocalWriter-0.4.0-arm64-beta.dmg](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-0.4.0-arm64-beta.dmg): the Mac app, these instructions and the extension ZIP.
+- [LocalWriter-Chrome-0.4.0.zip](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-Chrome-0.4.0.zip): also available separately for convenience.
 
 This is an **ad-hoc-signed, unnotarized beta**, not a production-signed release. macOS may block the first launch. If you trust the sender and intended to install this beta, Apple's documented process is to try opening it, then use **System Settings → Privacy & Security → Open Anyway**. Managed Macs may not permit this. Do not disable Gatekeeper or install a root certificate. See https://support.apple.com/en-us/102445.
 
@@ -64,6 +64,8 @@ Review suggestions before accepting them. Google Docs support is experimental an
 When reporting a problem, include app/extension version, macOS version, editor/browser, language, and a **non-sensitive** example sentence. The Mac menu has **Editor Diagnostics…**. Do not send private documents or messages as test samples.
 
 ## Updating
+
+Download the newer DMG and extension ZIP from [GitHub Releases](https://github.com/johnBgood/local-writing-assistant/releases).
 
 1. Quit LocalWriter from **✎ → Quit LocalWriter**.
 2. Replace the app in Applications with the newer version; launch it.

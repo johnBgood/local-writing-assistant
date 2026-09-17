@@ -2,7 +2,11 @@
 
 This Manifest V3 extension uses the same Qwen3 client and UTF-16 corrections as the Mac app through Chrome Native Messaging. Manual activation uses active-tab access. Optional automatic activation requests HTTP/HTTPS website access only when you enable it. There is no remote code, analytics, or cloud inference.
 
-## Install
+## Install without building
+
+Download the [Mac app DMG](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-0.4.0-arm64-beta.dmg) and [extension ZIP](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.0/LocalWriter-Chrome-0.4.0.zip) from GitHub. Install the app, set up Ollama/Qwen3 once, then choose **Install Chrome Bridge…** in the app menu. Extract the ZIP to a permanent folder and load it through **chrome://extensions → Developer mode → Load unpacked**. No source checkout or build tools are required. Follow the [complete setup guide](../docs/TESTERS.md).
+
+## Install from source
 
 For a fresh Mac, start with the [source build and model setup](../README.md#build-and-run-from-source). To install a shared ZIP without developer tools, see the [tester guide](../docs/TESTERS.md).
 
