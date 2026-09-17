@@ -82,3 +82,7 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 - Use `open -n -g dist/LocalWriter.app --args --probe-editor --app com.google.Chrome --report /tmp/localwriter-probe.txt` for a targeted, text-free geometry/model diagnostic. LaunchServices preserves the app's Accessibility identity; a direct shell invocation may inherit different permission attribution.
 
 `WritingCore` owns edit validation, word differences, sentence ranges, and app availability state. `Accessibility.swift` adapts native and external editors. `Overlay.swift` draws underlines and suggestion panels. `App.swift` coordinates menus, debounce, hover, and asynchronous checks. `LocalModel.swift` owns model requests and the optional project-local runtime.
+
+## Chrome extension (local prototype)
+
+The `extension/` directory contains an unpacked Manifest V3 companion using the same local Qwen3 model via a narrowly scoped native messaging host. Standard browser fields have inline corrections; Google Docs currently has selection checking and copy-back only. See [extension setup and limitations](extension/README.md).

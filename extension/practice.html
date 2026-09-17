@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>LocalWriter editor checks</title>
+<style>body{font:20px system-ui;max-width:800px;margin:50px auto}textarea,input,[contenteditable]{font:22px system-ui;border:1px solid #999;padding:16px;width:100%;box-sizing:border-box;margin:10px 0 30px;min-height:65px}textarea{height:150px}[contenteditable]{min-height:150px}</style>
+<h1>LocalWriter shared editor checks</h1>
+<label for="plain">Plain textarea</label><textarea id="plain" spellcheck="false">This is a speling mistake.</textarea>
+<label for="single">Single-line input</label><input id="single" spellcheck="false" value="This is a speling mistake.">
+<label for="rich">Rich contenteditable</label><div id="rich" role="textbox" aria-multiline="true" aria-label="Rich contenteditable" contenteditable="true" spellcheck="false"><p>This is a <b>speling</b> mistake.</p><p><br></p><p>She go to work yesterday.</p></div>
+</html>
+
+<script src="core.js"></script><script src="content.js"></script>

@@ -291,6 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 @main
 struct LocalWriterApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--native-messaging") { NativeMessaging.run(); return }
         if CommandLine.arguments.contains("--render-popup") {
             _ = NSApplication.shared
             let overlay = Overlay()

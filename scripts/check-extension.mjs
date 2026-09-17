@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+vm.runInThisContext(fs.readFileSync(new URL('../extension/core.js',import.meta.url),'utf8'));
+const {validEdit,applyEdits}=globalThis.LocalWriterCore;
+const text='👋 A speling mistake.';
+const edit={start:5,length:7,original:'speling',replacement:'spelling'};
+assert(validEdit(text,edit));assert.equal(applyEdits(text,[edit]),'👋 A spelling mistake.');
+assert(!validEdit('changed',edit));assert.throws(()=>applyEdits(text,[edit,edit]));
+assert.throws(()=>applyEdits(text,[{...edit,start:-1}]));
+console.log('PASS: extension Unicode offsets, stale edits, overlapping edits');

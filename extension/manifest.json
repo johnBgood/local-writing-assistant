@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "LocalWriter",
+  "version": "0.1.0",
+  "description": "On-device English writing suggestions powered by the LocalWriter Mac app.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "nativeMessaging",
+    "storage",
+    "contextMenus",
+    "clipboardWrite"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "LocalWriter",
+    "default_popup": "popup.html"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAi8N8vGV4Iqes1f5F3wUd0Lg629swO1rX0SGi3gdG6A3tL/sonHMAqZK8HdmhtGp0354ZFf4q7bxEZ6yue6f7WPKu0HmQ0+IXWtnE7zF2+tjM6pJNfdDXjjT/3onM2V5WyXnARtBWCBeMC0F2LnpOupANT1I3l0AB4S18D1f0C0EK502gkfiVmwBwMaAj/7SP7JwxUCs01j9goHC1gzZ5WO/opwJ0wJ7jaYcWT0VawL6lqGHP09EQmRw0PFjty2047CTBXW5PptKI+pL+6RbvSQaWxoFKg9DnO4gGkdkW8lbva40NctRXzqKV8eusX622LOphp51b8FT9d9CDulVtMQIDAQAB"
+}
