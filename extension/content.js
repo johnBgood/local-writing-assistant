@@ -32,7 +32,7 @@
   function draw(){lines.replaceChildren();if(disabled||!editor||text(editor)!==snapshot)return;
     for(const edit of edits){if(!validEdit(snapshot,edit))continue;
       for(const match of snapshot.slice(edit.start,edit.start+edit.length).matchAll(/\S+/gu))for(const r of boxes(edit.start+match.index,match[0].length)){
-        const line=document.createElement('div');line.className='line';line.style.cssText=`left:${r.left}px;top:${r.bottom-3}px;width:${r.right-r.left}px;height:6px`;
+        const line=document.createElement('div');line.className='line';line.style.cssText=`left:${r.left}px;top:${r.bottom-1}px;width:${r.right-r.left}px;height:6px`;
         line.onmouseenter=()=>{clearTimeout(hoverTimer);hoverTimer=setTimeout(()=>show(edit,r),200);};line.onmouseleave=()=>clearTimeout(hoverTimer);line.onclick=()=>show(edit,r);lines.append(line);
       }
     }

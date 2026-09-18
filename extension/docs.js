@@ -82,7 +82,7 @@
       if(!validEdit(snapshot.text,edit)) continue;
       for(const word of edit.original.matchAll(/\S+/gu)) for(const r of rangeBoxes(current,edit.start+word.index,word[0].length)) {
         const line=document.createElement('div');line.className='line';
-        line.style.cssText=`left:${r.left}px;top:${r.bottom-5}px;width:${r.right-r.left}px`;
+        line.style.cssText=`left:${r.left}px;top:${r.bottom-2}px;width:${r.right-r.left}px`;
         line.onmouseenter=()=>{clearTimeout(hover);hover=setTimeout(()=>show(edit.replacement||'Remove this text',r,edit),150);};
         line.onmouseleave=()=>clearTimeout(hover);line.onclick=()=>show(edit.replacement||'Remove this text',r,edit);lines.append(line);
       }

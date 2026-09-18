@@ -19,10 +19,11 @@ final class UnderlineView: NSView {
             (mark.sentence ? NSColor.systemBlue : NSColor.systemRed).setStroke()
             let path = NSBezierPath(); path.lineWidth = 1.5
             var x = mark.rect.minX
-            path.move(to: CGPoint(x: x, y: mark.rect.minY + 1))
+            let baseline = mark.rect.minY + (mark.sentence ? 1 : -5)
+            path.move(to: CGPoint(x: x, y: baseline))
             while x < mark.rect.maxX {
                 x += 2
-                path.line(to: CGPoint(x: x, y: mark.rect.minY + (Int(x - mark.rect.minX) % 4 == 0 ? 1 : 3)))
+                path.line(to: CGPoint(x: x, y: baseline + (Int(x - mark.rect.minX) % 4 == 0 ? 0 : 2)))
             }
             path.stroke()
         }

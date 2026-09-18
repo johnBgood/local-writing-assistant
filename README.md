@@ -4,7 +4,7 @@ An English, French and German writing assistant for macOS 14+, built with Swift 
 
 ## Download and install — no build required
 
-**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.4/LocalWriter-0.4.4-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.4/LocalWriter-Chrome-0.4.4.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
+**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.5/LocalWriter-0.4.5-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.5/LocalWriter-Chrome-0.4.5.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
 
 The beta requires **an Apple Silicon Mac and macOS 14+**. No Git, Xcode, Python or compilation is needed.
 
@@ -63,7 +63,7 @@ The bridge is installed in your user Application Support folder and allows only 
 
 ## Share a beta with testers
 
-Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.4) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
+Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.5) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
 
 ```sh
 scripts/build-app.sh

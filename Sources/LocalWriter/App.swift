@@ -397,7 +397,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         snapshot = current
         let mouse = NSEvent.mouseLocation
         if overlay.popover.isVisible && overlay.popover.frame.insetBy(dx: -12, dy: -12).contains(mouse) { return }
-        let mark = marks.first { !$0.sentence && $0.rect.insetBy(dx: -3, dy: -4).contains(mouse) }
+        let mark = marks.first { !$0.sentence && $0.rect.insetBy(dx: -3, dy: -7).contains(mouse) }
             ?? marks.first { $0.sentence && $0.rect.contains(mouse) }
         if mark?.range != hovered?.range || mark?.sentence != hovered?.sentence {
             hovered = mark; hoverBegan = Date()
