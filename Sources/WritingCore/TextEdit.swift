@@ -19,6 +19,17 @@ public struct TextEdit: Equatable, Sendable {
 
 public enum SentenceRanges {
     public static func inText(_ text: String) -> [NSRange] {
+        let editable = EditableText(text)
+        if editable.text != text {
+            var result: [NSRange] = [], offset = 0
+            for line in editable.text.components(separatedBy: "\n") {
+                for range in inText(line) {
+                    if let source = editable.sourceRange(NSRange(location: offset + range.location, length: range.length)) { result.append(source) }
+                }
+                offset += line.utf16.count + 1
+            }
+            return result
+        }
         var ranges: [NSRange] = []
         text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .bySentences) { _, range, _, _ in
             let sentence = String(text[range])

@@ -57,15 +57,19 @@ struct LocalModel {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         struct Result: Decodable { let corrected: String }
         let preferences = try PreferenceStore.read()
-        let protected = ProtectedWords(text, words: preferences.words)
+        let editable = EditableText(text)
+        let protected = ProtectedWords(editable.text, words: preferences.words)
         let result = try await response(Result.self, text: protected.text,
             instruction: "Fix spelling and grammatical errors. \(languageInstruction(text, preferences: preferences)) Never translate. Preserve LWTERM placeholder tokens exactly; they represent correctly spelled personal dictionary words. Preserve all wording, meaning, names, tone and punctuation except where incorrect. Do not improve style or add commentary. Return JSON with the corrected text in corrected. If the text is correct, return it unchanged.",
             schema: ["type": "object", "properties": ["corrected": ["type": "string"]], "required": ["corrected"]])
         let corrected = try protected.restore(result.corrected)
         guard !corrected.isEmpty, corrected.utf16.count <= max(1000, text.utf16.count * 2) else { throw ModelError.invalidResponse }
         try validateLanguage(corrected, source: text)
-        let edits = ModelEdits.difference(from: text, to: corrected)
-        guard text.split(whereSeparator: { $0.isWhitespace }) == corrected.split(whereSeparator: { $0.isWhitespace }) || !edits.isEmpty else { throw ModelError.invalidResponse }
+        let edits = ModelEdits.difference(from: editable.text, to: corrected).compactMap { edit -> TextEdit? in
+            guard let range = editable.sourceRange(edit.range) else { return nil }
+            return TextEdit(range: range, original: (text as NSString).substring(with: range), replacement: edit.replacement)
+        }
+        guard editable.text.split(whereSeparator: { $0.isWhitespace }) == corrected.split(whereSeparator: { $0.isWhitespace }) || !edits.isEmpty else { throw ModelError.invalidResponse }
         return edits
     }
     func rewrite(_ text: String) async throws -> String {

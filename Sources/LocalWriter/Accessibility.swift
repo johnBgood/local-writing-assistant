@@ -130,7 +130,7 @@ final class AccessibilityBridge {
         failure = "Focused control is not an editable text field"
         return nil
     }
-    private func descendantBounds(_ range: NSRange, in editor: EditorSnapshot) -> CGRect? {
+    private func textLeaves(in editor: EditorSnapshot) -> [(AXUIElement, String)]? {
         var queue = Array((attribute(editor.element, kAXChildrenAttribute) as? [AXUIElement] ?? []).reversed())
         var leaves: [(AXUIElement, String)] = []
         var index = 0
@@ -142,12 +142,16 @@ final class AccessibilityBridge {
                 leaves.append((element, text))
             } else { queue.append(contentsOf: (attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? []).reversed()) }
         }
-        guard queue.isEmpty, let ranges = TextLeafRanges.align(leaves.map({ $0.1 }), in: editor.text) else { return nil }
+        return queue.isEmpty ? leaves : nil
+    }
+    private func descendantBounds(_ range: NSRange, in editor: EditorSnapshot) -> CGRect? {
+        guard let leaves = textLeaves(in: editor),
+              let ranges = TextLeafRanges.alignDecorated(leaves.map({ $0.1 }), in: editor.text) else { return nil }
         var result = CGRect.null
-        for ((element, _), leafRange) in zip(leaves, ranges) {
-            let intersection = NSIntersectionRange(range, leafRange)
+        for ((element, _), mapping) in zip(leaves, ranges) {
+            let intersection = NSIntersectionRange(range, mapping.source)
             guard intersection.length > 0 else { continue }
-            var local = CFRange(location: intersection.location - leafRange.location, length: intersection.length)
+            var local = CFRange(location: intersection.location - mapping.source.location + mapping.leaf.location, length: intersection.length)
             guard let input = AXValueCreate(.cfRange, &local),
                   let output = parameter(element, kAXBoundsForRangeParameterizedAttribute, input),
                   CFGetTypeID(output) == AXValueGetTypeID() else { return nil }
@@ -156,6 +160,22 @@ final class AccessibilityBridge {
             result = result.union(rect)
         }
         return result.isNull ? nil : result
+    }
+    func structureDiagnostic(_ editor: EditorSnapshot) -> String {
+        var queue = [editor.element], roles: [String: Int] = [:], leaves: [String] = []
+        var count = 0
+        while !queue.isEmpty && count < 256 {
+            let element = queue.removeLast(); count += 1
+            if attribute(element, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole { continue }
+            let role = attribute(element, kAXRoleAttribute) as? String ?? "unknown"
+            roles[role, default: 0] += 1
+            if role == kAXStaticTextRole, let text = attribute(element, kAXValueAttribute) as? String { leaves.append(text) }
+            else { queue.append(contentsOf: (attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? []).reversed()) }
+        }
+        let selected = attribute(editor.element, kAXSelectedTextAttribute) as? String
+        let range = selectedRange(in: editor)
+        let matches = range.map { (editor.text as NSString).substring(with: $0) == selected } ?? false
+        return "Editor descendants: \(count), roles: \(roles), truncated: \(!queue.isEmpty)\nStatic leaf lengths: \(leaves.map { $0.utf16.count }), aligned: \(TextLeafRanges.align(leaves, in: editor.text) != nil)\nSelected range: \(String(describing: range)), selected length: \(selected?.utf16.count ?? -1), matches value slice: \(matches)"
     }
     func rangeDiagnostic(_ range: NSRange, editor: EditorSnapshot) -> String {
         var cfRange = CFRange(location: range.location, length: range.length)
@@ -223,26 +243,7 @@ final class AccessibilityBridge {
         }
         var settable = DarwinBoolean(false)
         let directReplacement = AXUIElementIsAttributeSettable(editor.element, kAXSelectedTextAttribute as CFString, &settable) == .success && settable.boolValue
-        var range = CFRange(location: edit.range.location, length: edit.range.length)
-        guard let value = AXValueCreate(.cfRange, &range),
-              AXUIElementSetAttributeValue(editor.element, kAXSelectedTextRangeAttribute as CFString, value) == .success else {
-            failure = "This editor could not select the correction range."; return false
-        }
-        var selected = false
-        for _ in 0..<20 {
-            guard let fresh = snapshot(), fresh.sameEditor(as: editor), fresh.text == editor.text else {
-                failure = "The draft or focus changed before replacement."; return false
-            }
-            if let value = attribute(editor.element, kAXSelectedTextRangeAttribute), CFGetTypeID(value) == AXValueGetTypeID() {
-                var actual = CFRange()
-                if AXValueGetValue(value as! AXValue, .cfRange, &actual), actual.location == range.location, actual.length == range.length,
-                   attribute(editor.element, kAXSelectedTextAttribute) as? String == edit.original {
-                    selected = true; break
-                }
-            }
-            try? await Task.sleep(nanoseconds: 30_000_000)
-        }
-        guard selected else { failure = "The editor did not select the requested words. Nothing was replaced."; return false }
+        guard let selection = await selectReplacement(edit, editor: editor) else { return false }
         let status = directReplacement ? AXUIElementSetAttributeValue(editor.element, kAXSelectedTextAttribute as CFString, edit.replacement as CFString) : .attributeUnsupported
         for _ in 0..<(status == .success ? 30 : 0) {
             let actual = attribute(editor.element, kAXValueAttribute) as? String
@@ -252,19 +253,48 @@ final class AccessibilityBridge {
         }
         // Rich editors may acknowledge AXSelectedText without implementing the edit.
         // Paste only into the same, unchanged, explicitly verified selection.
-        return await pasteReplacement(edit, editor: editor, expected: expected)
+        return await pasteReplacement(edit, editor: editor, expected: expected, selection: selection)
     }
 
-    private func selectionMatches(_ edit: TextEdit, editor: EditorSnapshot) -> Bool {
+    private struct SelectionTarget {
+        let element: AXUIElement
+        let range: NSRange
+    }
+    private func selectReplacement(_ edit: TextEdit, editor: EditorSnapshot) async -> SelectionTarget? {
+        var targets = [SelectionTarget(element: editor.element, range: edit.range)]
+        if let leaves = textLeaves(in: editor),
+           let mappings = TextLeafRanges.alignDecorated(leaves.map({ $0.1 }), in: editor.text) {
+            for ((element, _), mapping) in zip(leaves, mappings)
+                where mapping.source.length > 0 && NSIntersectionRange(edit.range, mapping.source) == edit.range {
+                targets.append(SelectionTarget(element: element, range: NSRange(
+                    location: edit.range.location - mapping.source.location + mapping.leaf.location, length: edit.range.length)))
+            }
+        }
+        for target in targets {
+            guard !Task.isCancelled, let current = snapshot(), current.sameEditor(as: editor), current.text == editor.text else {
+                failure = "The draft or focus changed before replacement."; return nil
+            }
+            var range = CFRange(location: target.range.location, length: target.range.length)
+            guard let value = AXValueCreate(.cfRange, &range),
+                  AXUIElementSetAttributeValue(target.element, kAXSelectedTextRangeAttribute as CFString, value) == .success else { continue }
+            for _ in 0..<20 {
+                if selectionMatches(edit, editor: editor, selection: target) { return target }
+                try? await Task.sleep(nanoseconds: 30_000_000)
+            }
+        }
+        failure = "The editor did not select the requested words. Nothing was replaced."; return nil
+    }
+    private func selectionMatches(_ edit: TextEdit, editor: EditorSnapshot, selection: SelectionTarget) -> Bool {
         guard let current = snapshot(), current.sameEditor(as: editor), current.text == editor.text,
-              let value = attribute(editor.element, kAXSelectedTextRangeAttribute), CFGetTypeID(value) == AXValueGetTypeID(),
-              attribute(editor.element, kAXSelectedTextAttribute) as? String == edit.original else { return false }
+              let value = attribute(selection.element, kAXSelectedTextRangeAttribute), CFGetTypeID(value) == AXValueGetTypeID(),
+              AXValueGetType(value as! AXValue) == .cfRange,
+              attribute(selection.element, kAXSelectedTextAttribute) as? String == edit.original else { return false }
         var range = CFRange()
-        return AXValueGetValue(value as! AXValue, .cfRange, &range) && range.location == edit.range.location && range.length == edit.range.length
+        return AXValueGetValue(value as! AXValue, .cfRange, &range) && range.location == selection.range.location && range.length == selection.range.length
     }
 
-    private func pasteReplacement(_ edit: TextEdit, editor: EditorSnapshot, expected: String) async -> Bool {
-        guard !Task.isCancelled, selectionMatches(edit, editor: editor) else {
+    private func pasteReplacement(_ edit: TextEdit, editor: EditorSnapshot, expected: String, selection: SelectionTarget) async -> Bool {
+        guard !Task.isCancelled, selectionMatches(edit, editor: editor, selection: selection) else {
             failure = "The draft, selection, or focus changed. Nothing was pasted."; return false
         }
         guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true),
@@ -273,7 +303,7 @@ final class AccessibilityBridge {
             failure = "Could not prepare replacement while preserving the clipboard."; return false
         }
         defer { clipboard.restore() }
-        guard selectionMatches(edit, editor: editor) else {
+        guard selectionMatches(edit, editor: editor, selection: selection) else {
             failure = "The draft, selection, or focus changed. Nothing was pasted."; return false
         }
         down.flags = .maskCommand; up.flags = .maskCommand

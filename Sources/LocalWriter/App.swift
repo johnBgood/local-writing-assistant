@@ -490,6 +490,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 @main
 struct LocalWriterApp {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--check-thread-edits") {
+            _ = NSApplication.shared
+            Task { @MainActor in
+                let bridge = AccessibilityBridge()
+                var lines: [String] = []
+                let fixture = "This is a speling mistake. I are Jon."
+                // Chromium can publish focus asynchronously after enabling its AX tree.
+                for _ in 0..<20 {
+                    if bridge.snapshot() != nil { break }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                do {
+                    guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.tinyspeck.slackmacgap",
+                          let editor = bridge.snapshot(), [fixture, fixture.replacingOccurrences(of: "speling", with: "spelling")].contains(editor.text.replacingOccurrences(of: "\u{E506}", with: "").split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")) else {
+                        throw NSError(domain: "Fixture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Refused: focused draft is not the exact disposable test sentence. " + bridge.failure])
+                    }
+                    let edits = try await LocalModel().analyze(editor.text)
+                    lines.append("Model corrections: \(edits.count); drawable: \(edits.filter { bridge.bounds($0.range, in: editor) != nil }.count)")
+                    let wordRange = (editor.text as NSString).range(of: "speling")
+                    let word = TextEdit(range: wordRange, original: "speling", replacement: "spelling")
+                    if wordRange.location != NSNotFound {
+                        guard await bridge.applyVerified(word, to: editor) else { throw NSError(domain: "Word", code: 2, userInfo: [NSLocalizedDescriptionKey: bridge.failure]) }
+                        lines.append("PASS: word replacement")
+                    } else { lines.append("Word already corrected by prior test") }
+                    guard let next = bridge.snapshot(), next.sameEditor(as: editor), next.text == (wordRange.location == NSNotFound ? editor.text : word.applying(to: editor.text, snapshot: editor.text)) else {
+                        throw NSError(domain: "Fixture", code: 3, userInfo: [NSLocalizedDescriptionKey: "Draft changed; stopped before sentence test."])
+                    }
+                    guard let sentenceRange = SentenceRanges.inText(next.text).last else { fatalError("Fixture has no sentence") }
+                    let sentence = TextEdit(range: sentenceRange, original: (next.text as NSString).substring(with: sentenceRange), replacement: "I am Jon.")
+                    guard await bridge.applyVerified(sentence, to: next) else {
+                        lines.append("Requested sentence range: \(sentence.range), length: \(sentence.original.utf16.count)")
+                        lines.append(bridge.structureDiagnostic(next))
+                        throw NSError(domain: "Sentence", code: 4, userInfo: [NSLocalizedDescriptionKey: bridge.failure])
+                    }
+                    lines.append("PASS: sentence replacement; nothing sent")
+                } catch { lines.append("FAIL: " + error.localizedDescription) }
+                let report = lines.joined(separator: "\n")
+                if let i = CommandLine.arguments.firstIndex(of: "--report"), CommandLine.arguments.count > i + 1 {
+                    try? report.write(toFile: CommandLine.arguments[i+1], atomically: true, encoding: .utf8)
+                }
+                print(report); exit(0)
+            }
+            NSApplication.shared.run(); return
+        }
         if CommandLine.arguments.contains("--check-bridge-installer") {
             let home = FileManager.default.temporaryDirectory.appendingPathComponent("localwriter-test-'space-" + UUID().uuidString)
             defer { try? FileManager.default.removeItem(at: home) }
@@ -588,6 +632,7 @@ struct LocalWriterApp {
                 lines.append("Excluded app IDs: \(excluded)")
                 if let editor = bridge.snapshot(app: target) {
                     lines.append("Editor frame: \(editor.frame)")
+                    lines.append(bridge.structureDiagnostic(editor))
                     do {
                         try await Task.sleep(nanoseconds: 800_000_000)
                         let next = bridge.snapshot(app: target)

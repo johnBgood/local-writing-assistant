@@ -1,6 +1,25 @@
 import Foundation
 
 public enum TextLeafRanges {
+    public struct Mapping {
+        public let source: NSRange
+        public let leaf: NSRange
+    }
+    public static func alignDecorated(_ leaves: [String], in text: String) -> [Mapping]? {
+        let source = EditableText(text), values = leaves.map(EditableText.init)
+        guard let ranges = align(values.map(\.text), in: source.text) else { return nil }
+        var result: [Mapping] = []
+        for (value, range) in zip(values, ranges) {
+            if range.length == 0 {
+                result.append(Mapping(source: NSRange(location: 0, length: 0), leaf: NSRange(location: 0, length: 0))); continue
+            }
+            guard let sourceRange = source.sourceRange(range),
+                  let leafRange = value.sourceRange(NSRange(location: 0, length: range.length)) else { return nil }
+            result.append(Mapping(source: sourceRange, leaf: leafRange))
+        }
+        return result
+    }
+
     /// Rich editor leaves may omit paragraph separators. Only whitespace gaps are allowed.
     public static func align(_ leaves: [String], in text: String) -> [NSRange]? {
         let source = text as NSString

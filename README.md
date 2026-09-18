@@ -4,7 +4,7 @@ An English, French and German writing assistant for macOS 14+, built with Swift 
 
 ## Download and install — no build required
 
-**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.2/LocalWriter-0.4.2-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.2/LocalWriter-Chrome-0.4.2.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
+**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.3/LocalWriter-0.4.3-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.3/LocalWriter-Chrome-0.4.3.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
 
 The beta requires **an Apple Silicon Mac and macOS 14+**. No Git, Xcode, Python or compilation is needed.
 
@@ -63,7 +63,7 @@ The bridge is installed in your user Application Support folder and allows only 
 
 ## Share a beta with testers
 
-Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.2) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
+Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.3) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
 
 ```sh
 scripts/build-app.sh
@@ -127,6 +127,8 @@ Click **Add “… ” to dictionary** on a correction card, or use **Personal d
 ## How corrections work
 
 After a typing pause, the model returns conservatively corrected text in structured JSON. The app computes word-level differences and UTF-16 ranges locally. Accepting a correction requires the original editor and entire draft to still match the analyzed snapshot. Typing cancels outdated requests. Password fields and excluded apps are skipped.
+
+Rich-list accessibility markers are excluded from model input and mapped back to original UTF-16 offsets. Sentence ranges exclude non-editable bullet glyphs; replacement falls back to a matching text child when an editor refuses a container-relative selection. Changes spanning removed list decorations are rejected.
 
 Whitespace-only changes are ignored. Phrase corrections retain one replacement range while drawing separate underlines beneath their words, never across blank lines. Hovering a sentence highlights its words in blue and offers a meaning-preserving rewrite; accepting it replaces the complete sentence. Selecting text in a native editor also requests a rewrite automatically once the selection settles. The suggestion is invalidated when the selection, editor or draft changes. This requires the editor to expose its selected range through Accessibility.
 

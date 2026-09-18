@@ -3,6 +3,23 @@ import WritingCore
 func XCTAssertEqual<T: Equatable>(_ lhs: T, _ rhs: T) { precondition(lhs == rhs, "Expected \(rhs), got \(lhs)") }
 func XCTAssertNil<T>(_ value: T?) { precondition(value == nil, "Expected nil") }
 final class TextEditTests {
+    func testRichListOffsets() {
+        let raw = "\u{E506}This is a speling mistake.\n\u{E506}\n\u{E506}I are Jon."
+        let editable = EditableText(raw)
+        XCTAssertEqual(editable.text, "This is a speling mistake.\n\nI are Jon.")
+        let leaves = ["\u{E506} This is a speling mistake.", "\u{E506}", "\u{E506} I are Jon."]
+        XCTAssertNil(TextLeafRanges.align(leaves, in: raw)) // Previous implementation loses all underlines.
+        let mapped = TextLeafRanges.alignDecorated(leaves, in: raw)!
+        XCTAssertEqual(mapped[0].source.location, 1)
+        XCTAssertEqual(mapped[0].leaf.location, 2)
+        let sentences = SentenceRanges.inText(raw).map { (raw as NSString).substring(with: $0) }
+        XCTAssertEqual(sentences, ["This is a speling mistake.", "I are Jon."])
+        let word = (editable.text as NSString).range(of: "speling")
+        XCTAssertEqual((raw as NSString).substring(with: editable.sourceRange(word)!), "speling")
+        XCTAssertNil(editable.sourceRange(NSRange(location: 0, length: editable.text.utf16.count)))
+        XCTAssertEqual(EditableText("Hello \u{E506} custom glyph").text, "Hello \u{E506} custom glyph")
+        XCTAssertNil(TextLeafRanges.alignDecorated(["Unrelated text"], in: raw))
+    }
     func testHighlightRangesAndContainerFocus() {
         XCTAssertEqual(TextLeafRanges.align(["Hello", "👋 wrong words"], in: "Hello\n\n👋 wrong words\n"), [NSRange(location: 0, length: 5), NSRange(location: 7, length: 14)])
         XCTAssertEqual(TextLeafRanges.align(["same", "same"], in: "same\nsame"), [NSRange(location: 0, length: 4), NSRange(location: 5, length: 4)])
@@ -94,6 +111,7 @@ final class TextEditTests {
 @main struct CoreChecks {
     static func main() {
         let tests = TextEditTests()
+        tests.testRichListOffsets()
         tests.testHighlightRangesAndContainerFocus()
         tests.testBlankLinesAreNotCorrections()
         precondition(PreferenceStore.validWord("Übergrößen"))
