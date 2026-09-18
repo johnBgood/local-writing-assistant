@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let bridge = AccessibilityBridge()
     private let overlay = Overlay()
     private var timer: Timer?
+    private var scrollTimer: Timer?
+    private var scrollMonitors: [Any] = []
+    private var lastScroll = Date.distantPast
     private var snapshot: EditorSnapshot?
     private var marks: [Mark] = []
     private var paused = false
@@ -47,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         get { status.title }
         set { status.title = newValue; demoStatus?.stringValue = newValue }
     }
-    func applicationWillTerminate(_ notification: Notification) { modelStartupTask?.cancel(); runtime.stop() }
+    func applicationWillTerminate(_ notification: Notification) { modelStartupTask?.cancel(); scrollTimer?.invalidate(); scrollMonitors.forEach { NSEvent.removeMonitor($0) }; runtime.stop() }
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -77,10 +80,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] _ in
+            Task { @MainActor in self?.scrollActivity() }
+        }) { scrollMonitors.append(monitor) }
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] event in
+            self?.scrollActivity(); return event
+        }) { scrollMonitors.append(monitor) }
         startModel()
-        if CommandLine.arguments.contains("--practice") || CommandLine.arguments.contains("--practice-check") || CommandLine.arguments.contains("--selection-check") { demo() }
+        if CommandLine.arguments.contains("--practice") || CommandLine.arguments.contains("--practice-check") || CommandLine.arguments.contains("--selection-check") || CommandLine.arguments.contains("--scroll-check") { demo() }
         if CommandLine.arguments.contains("--practice-check") { runPracticeCheck() }
         if CommandLine.arguments.contains("--selection-check") { runSelectionCheck() }
+        if CommandLine.arguments.contains("--scroll-check") { runScrollCheck() }
+    }
+    private func scrollActivity() {
+        guard !paused, !applying, snapshot != nil else { return }
+        lastScroll = Date()
+        // Do not leave stale marks floating while the external app handles the event.
+        overlay.hide(); displayed = nil; hovered = nil
+        guard scrollTimer == nil else { return }
+        let refresh = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.refreshScrolledGeometry() }
+        }
+        scrollTimer = refresh
+        RunLoop.main.add(refresh, forMode: .common)
+    }
+    private func refreshScrolledGeometry() {
+        guard !paused, !applying, let old = snapshot,
+              let current = bridge.snapshot(), current.sameEditor(as: old), current.text == old.text else {
+            scrollTimer?.invalidate(); scrollTimer = nil; clear(); return
+        }
+        snapshot = current
+        marks = makeMarks(for: current)
+        overlay.draw(marks); lastGeometryUpdate = Date()
+        if Date().timeIntervalSince(lastScroll) > 0.15 {
+            scrollTimer?.invalidate(); scrollTimer = nil
+        }
+    }
+    private func runScrollCheck() {
+        Task { @MainActor in
+            timer?.invalidate() // Isolate scroll updates from the normal editor/model loop.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let view = bridge.practiceEditor, let scroll = view.enclosingScrollView else { exit(1) }
+            view.string = (0..<30).map { "Sentence \($0) has enough words to scroll." }.joined(separator: "\n")
+            view.layoutManager?.ensureLayout(for: view.textContainer!)
+            view.sizeToFit()
+            guard let before = bridge.practiceSnapshot() else { exit(1) }
+            snapshot = before; marks = makeMarks(for: before); overlay.draw(marks)
+            let oldRects = marks.map(\.rect)
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: 80)); scroll.reflectScrolledClipView(scroll.contentView)
+            let started = Date()
+            scrollActivity()
+            for _ in 0..<12 {
+                try? await Task.sleep(nanoseconds: 10_000_000)
+                if marks.map(\.rect) != oldRects && overlay.window.isVisible {
+                    print("PASS: scroll event redraws actual text geometry in \(Int(Date().timeIntervalSince(started) * 1000)) ms without waiting for analysis")
+                    NSApp.terminate(nil); return
+                }
+            }
+            print("FAIL: scroll marks did not follow within 120 ms; old=\(oldRects.count), new=\(marks.count), active=\(NSApp.isActive), snapshot=\(snapshot != nil), offset=\(scroll.contentView.bounds.origin)"); exit(1)
+        }
     }
     private func runSelectionCheck() {
         Task { @MainActor in

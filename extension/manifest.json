@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LocalWriter",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "On-device multilingual writing suggestions powered by the LocalWriter Mac app.",
   "permissions": [
     "activeTab",

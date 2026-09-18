@@ -4,7 +4,7 @@ An English, French and German writing assistant for macOS 14+, built with Swift 
 
 ## Download and install — no build required
 
-**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.1/LocalWriter-0.4.1-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.1/LocalWriter-Chrome-0.4.1.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
+**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.2/LocalWriter-0.4.2-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.2/LocalWriter-Chrome-0.4.2.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
 
 The beta requires **an Apple Silicon Mac and macOS 14+**. No Git, Xcode, Python or compilation is needed.
 
@@ -63,7 +63,7 @@ The bridge is installed in your user Application Support folder and allows only 
 
 ## Share a beta with testers
 
-Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.1) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
+Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.2) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
 
 ```sh
 scripts/build-app.sh
@@ -163,6 +163,7 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 - `CoreChecks`: Unicode ranges, stale edits, word differences including insertions and deletions, and app enable/disable states.
 - `--check-editor`: real-model spelling and grammar, native word coordinates, overlay visibility, acceptance, and stale-edit rejection.
 - `--practice-check`: opens a synthetic practice draft and exercises the running background loop, checks rendered red underline pixels, and accepts a correction. Requires the local model server; closes the test app afterward.
+- `--scroll-check`: scrolls the native practice editor and verifies geometry redraw within 120 ms, independent of model analysis. Native wheel/trackpad scrolling uses a temporary 30 Hz geometry refresh instead of the idle polling interval.
 - `--selection-check`: verifies automatic selected-text rewriting and full-range acceptance in the native practice editor with the real local model.
 - `--check-clipboard`: uses an isolated test pasteboard to verify preservation of text and binary formats and that newer clipboard copies are not overwritten.
 - **Editor Diagnostics…** reports Accessibility metadata without editor text. `--diagnose` also exposes this for development.
