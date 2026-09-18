@@ -4,7 +4,7 @@ An English, French and German writing assistant for macOS 14+, built with Swift 
 
 ## Download and install — no build required
 
-**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.3/LocalWriter-0.4.3-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.3/LocalWriter-Chrome-0.4.3.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
+**[Download the Mac app (DMG)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.4/LocalWriter-0.4.4-arm64-beta.dmg)** · **[Download the Chrome extension (ZIP)](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.4/LocalWriter-Chrome-0.4.4.zip)** · [All releases](https://github.com/johnBgood/local-writing-assistant/releases)
 
 The beta requires **an Apple Silicon Mac and macOS 14+**. No Git, Xcode, Python or compilation is needed.
 
@@ -63,7 +63,7 @@ The bridge is installed in your user Application Support folder and allows only 
 
 ## Share a beta with testers
 
-Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.3) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
+Share the [GitHub release page](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.4) with testers; it contains the DMG, extension ZIP, setup guide and checksums. See [tester installation instructions](docs/TESTERS.md). To generate your own packages from source:
 
 ```sh
 scripts/build-app.sh
@@ -136,7 +136,7 @@ Editor discovery uses shared accessibility roles and focused descendants, withou
 
 Rich editors can advertise word bounds but return zero-sized rectangles. LocalWriter then maps their static text descendants back to the draft (allowing whitespace paragraph separators) and queries those text ranges. Mismatched text and whole-editor rectangles are rejected.
 
-The practice editor applies edits through NSTextView with undo support. External editors first use macOS Accessibility selected-text replacement, waiting for the requested selection and verifying the resulting draft. If that operation is unsupported or leaves the draft unchanged, LocalWriter verifies the same editor, text, and selection again and pastes the accepted suggestion using a targeted Command-V event. The previous clipboard formats are restored unless a newer clipboard copy has occurred. No Return key is sent. Changes are reported as successful only after the resulting draft matches the expected text.
+The practice editor applies edits through NSTextView with undo support. External editors use an exact, verified selection followed immediately by a targeted Command-V paste. Rich lists prefer the matching text child to avoid slow or ineffective container selections. LocalWriter rechecks the editor, draft and selection before pasting, then verifies the resulting text. The previous clipboard formats are restored unless a newer clipboard copy has occurred. No Return key is sent. Changes are reported as successful only after the resulting draft matches the expected text.
 
 ## Limits
 

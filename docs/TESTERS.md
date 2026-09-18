@@ -1,4 +1,4 @@
-# LocalWriter 0.4.3 — tester setup
+# LocalWriter 0.4.4 — tester setup
 
 This beta supports **Apple Silicon Macs (M1/M2/M3/M4), macOS 14 or later**. The included app is arm64; it does not run on Intel Macs. It checks English, French and German locally using Qwen3 4B. No Git checkout, Python, Xcode or Apple developer tools are needed.
 
@@ -6,10 +6,10 @@ Want to build it yourself instead? See the [source setup in the README](https://
 
 ## What to download
 
-Download these ready-to-install files from the [GitHub release](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.3). You do not need to clone or build the repository.
+Download these ready-to-install files from the [GitHub release](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.4). You do not need to clone or build the repository.
 
-- [LocalWriter-0.4.3-arm64-beta.dmg](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.3/LocalWriter-0.4.3-arm64-beta.dmg): the Mac app, these instructions and the extension ZIP.
-- [LocalWriter-Chrome-0.4.3.zip](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.3/LocalWriter-Chrome-0.4.3.zip): also available separately for convenience.
+- [LocalWriter-0.4.4-arm64-beta.dmg](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.4/LocalWriter-0.4.4-arm64-beta.dmg): the Mac app, these instructions and the extension ZIP.
+- [LocalWriter-Chrome-0.4.4.zip](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.4/LocalWriter-Chrome-0.4.4.zip): also available separately for convenience.
 
 This is an **ad-hoc-signed, unnotarized beta**, not a production-signed release. macOS may block the first launch. If you trust the sender and intended to install this beta, Apple's documented process is to try opening it, then use **System Settings → Privacy & Security → Open Anyway**. Managed Macs may not permit this. Do not disable Gatekeeper or install a root certificate. See https://support.apple.com/en-us/102445.
 
@@ -37,7 +37,7 @@ At launch, the menu displays **Starting Ollama…**, **Loading Qwen3…**, then 
 ## 3. Connect and install the Chrome extension
 
 1. From LocalWriter's **✎** menu, choose **Install Chrome Bridge…**, then **Install**. This copies the native bridge into your user Application Support folder and allows only this LocalWriter extension to launch it. No administrator password is needed.
-2. Extract `LocalWriter-Chrome-0.4.3.zip` into a permanent folder, such as `~/LocalWriter-Chrome`. If using the ZIP from the DMG, copy it to the Mac before extracting. **Keep the extracted folder** while the extension is installed.
+2. Extract `LocalWriter-Chrome-0.4.4.zip` into a permanent folder, such as `~/LocalWriter-Chrome`. If using the ZIP from the DMG, copy it to the Mac before extracting. **Keep the extracted folder** while the extension is installed.
 3. Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, and select the extracted folder containing `manifest.json`.
 4. Open **LocalWriter** from Chrome's Extensions menu. Check for **Connected to LocalWriter on your Mac**.
 5. Click **Enable automatically on websites** and approve Chrome's website-access request if you want checking in all tabs. Alternatively, enable individual tabs manually.

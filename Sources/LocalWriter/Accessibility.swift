@@ -241,18 +241,10 @@ final class AccessibilityBridge {
               let expected = edit.applying(to: current.text, snapshot: editor.text) else {
             failure = "The draft or focused editor changed. Hover the new suggestion and try again."; return false
         }
-        var settable = DarwinBoolean(false)
-        let directReplacement = AXUIElementIsAttributeSettable(editor.element, kAXSelectedTextAttribute as CFString, &settable) == .success && settable.boolValue
         guard let selection = await selectReplacement(edit, editor: editor) else { return false }
-        let status = directReplacement ? AXUIElementSetAttributeValue(editor.element, kAXSelectedTextAttribute as CFString, edit.replacement as CFString) : .attributeUnsupported
-        for _ in 0..<(status == .success ? 30 : 0) {
-            let actual = attribute(editor.element, kAXValueAttribute) as? String
-            if actual == expected { failure = "Correction applied"; return true }
-            if let actual, actual != editor.text { failure = "The draft changed unexpectedly. Check it before trying again."; return false }
-            try? await Task.sleep(nanoseconds: 30_000_000)
-        }
-        // Rich editors may acknowledge AXSelectedText without implementing the edit.
-        // Paste only into the same, unchanged, explicitly verified selection.
+        // Use one verified editing operation. Some rich editors acknowledge
+        // AXSelectedText without changing anything; waiting then retrying costs
+        // 900 ms and can race a delayed accessibility edit.
         return await pasteReplacement(edit, editor: editor, expected: expected, selection: selection)
     }
 
@@ -270,7 +262,14 @@ final class AccessibilityBridge {
                     location: edit.range.location - mapping.source.location + mapping.leaf.location, length: edit.range.length)))
             }
         }
+        // Rich lists have container offsets that can include non-editable glyphs.
+        // The verified leaf-relative selection is both precise and avoids the
+        // 600 ms wait for a container selection known to fail in these editors.
+        if EditableText(editor.text).text != editor.text, targets.count > 1 {
+            targets.append(targets.removeFirst())
+        }
         for target in targets {
+            if selectionMatches(edit, editor: editor, selection: target) { return target }
             guard !Task.isCancelled, let current = snapshot(), current.sameEditor(as: editor), current.text == editor.text else {
                 failure = "The draft or focus changed before replacement."; return nil
             }
