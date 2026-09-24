@@ -4,7 +4,7 @@ This Manifest V3 extension uses the same Qwen3 client and UTF-16 corrections as 
 
 ## Install without building
 
-Download the [Mac app DMG](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.5/LocalWriter-0.4.5-arm64-beta.dmg) and [extension ZIP](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.5/LocalWriter-Chrome-0.4.5.zip) from GitHub. Install the app, set up Ollama/Qwen3 once, then choose **Install Chrome Bridge…** in the app menu. Extract the ZIP to a permanent folder and load it through **chrome://extensions → Developer mode → Load unpacked**. No source checkout or build tools are required. Follow the [complete setup guide](../docs/TESTERS.md).
+Download the [Mac app DMG](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.6/LocalWriter-0.4.6-arm64-beta.dmg) and [extension ZIP](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.6/LocalWriter-Chrome-0.4.6.zip) from GitHub. Install the app, set up Ollama/Qwen3 once, then choose **Install Chrome Bridge…** in the app menu. Extract the ZIP to a permanent folder and load it through **chrome://extensions → Developer mode → Load unpacked**. No source checkout or build tools are required. Follow the [complete setup guide](../docs/TESTERS.md).
 
 ## Install from source
 
@@ -24,7 +24,7 @@ The public manifest key keeps the unpacked extension ID stable. No private signi
 
 Choose Automatic, English, Français or Deutsch in the popup. **Personal dictionary** lists shared words with Add/Remove controls; correction cards also offer **Add to dictionary**. The Mac app and Chrome share these preferences through the native host. Rebuild the app and reinstall its bridge when upgrading to extension 0.3.0. Word additions protect spelling while allowing nearby grammar corrections. Switch back to the tab to refresh changes made from the Mac menu.
 
-## Automatic activation (0.4.5)
+## Automatic activation (0.4.6)
 
 After reloading the extension, click **Enable automatically on websites** in its popup and accept Chrome’s website-access prompt. LocalWriter then starts on granted HTTP/HTTPS pages, including new tabs and reloads. Existing accessible tabs are activated immediately. The preference persists across browser restarts.
 

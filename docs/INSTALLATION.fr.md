@@ -4,7 +4,7 @@ LocalWriter comprend une app de barre de menus pour les éditeurs macOS et une e
 
 ## Installation sans compilation (recommandée)
 
-Télécharger l’[app Mac en DMG](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.5/LocalWriter-0.4.5-arm64-beta.dmg) et l’[extension Chrome en ZIP](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.5/LocalWriter-Chrome-0.4.5.zip) depuis la [version GitHub](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.5). Mac Apple Silicon et macOS 14+ requis ; aucun besoin de Git, Python ou Xcode.
+Télécharger l’[app Mac en DMG](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.6/LocalWriter-0.4.6-arm64-beta.dmg) et l’[extension Chrome en ZIP](https://github.com/johnBgood/local-writing-assistant/releases/download/v0.4.6/LocalWriter-Chrome-0.4.6.zip) depuis la [version GitHub](https://github.com/johnBgood/local-writing-assistant/releases/tag/v0.4.6). Mac Apple Silicon et macOS 14+ requis ; aucun besoin de Git, Python ou Xcode.
 
 1. Installer [Ollama](https://ollama.com/download/mac), le lancer une fois, puis exécuter `ollama pull qwen3:4b` dans Terminal. Le modèle nécessite un téléchargement initial séparé.
 2. Ouvrir le DMG, glisser **LocalWriter.app** dans **Applications**, puis lancer l’app. Elle démarre ensuite automatiquement le serveur local et charge le modèle.
@@ -111,7 +111,7 @@ Seule l’extension LocalWriter, d’identifiant `pkcahnmnafkepdcfepmbnboaadnbkh
 
 Le modèle doit rester en fonctionnement. Dans le menu de l’app Mac, choisir **Disable for Google Chrome** pour éviter les doubles soulignements avec l’extension. Les autres apps restent disponibles.
 
-## Activation automatique (extension 0.4.5)
+## Activation automatique (extension 0.4.6)
 
 Pour éviter d’activer chaque onglet :
 
