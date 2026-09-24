@@ -477,6 +477,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                       self.displayed?.range == mark.range,
                       self.selectedRange == expectedSelection,
                       expectedSelection == nil || self.bridge.selectedRange(in: editor) == expectedSelection else { return }
+                guard RewriteComparison.hasWordingChange(from: mark.word, to: result) else {
+                    self.rewriteResult = nil
+                    self.overlay.show(mark: mark, message: "No useful rewording found. Your text was left unchanged.")
+                    return
+                }
                 self.rewriteResult = result
                 self.overlay.show(mark: mark, replacement: result)
             } catch {

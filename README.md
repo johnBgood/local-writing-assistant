@@ -176,3 +176,9 @@ dist/LocalWriter.app/Contents/MacOS/LocalWriter --practice-check
 ## Chrome extension (local prototype)
 
 The `extension/` directory contains an unpacked Manifest V3 companion using the same local Qwen3 model via a narrowly scoped native messaging host. Standard browser fields have inline corrections; Google Docs has an experimental visible-text adapter plus selection checking and copy-back. Automatic activation is available with optional website permission, and individual sites can be excluded. See [extension setup and limitations](extension/README.md).
+
+### Sentence rewriting
+
+Sentence suggestions ask the local model for clearer, more concise wording, even when the grammar is correct. Automatic underlines still focus on spelling and grammar. If a rewrite only changes spacing, capitalization or punctuation, LocalWriter retries once and then reports that no useful rewording was found instead of offering the same text as a replacement. Model quality can vary; review suggestions before accepting them.
+
+Run `python3 scripts/check-rewrites.py` after building with Ollama running to check real-model rewrites in English, French and German.

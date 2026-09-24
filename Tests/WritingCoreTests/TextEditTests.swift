@@ -111,6 +111,9 @@ final class TextEditTests {
 @main struct CoreChecks {
     static func main() {
         let tests = TextEditTests()
+        precondition(!RewriteComparison.hasWordingChange(from: "Bonjour !", to: "  bonjour."))
+        precondition(!RewriteComparison.hasWordingChange(from: "Café", to: "Cafe\u{301}"))
+        precondition(RewriteComparison.hasWordingChange(from: "I would like to ask for your help", to: "Could you help me?"))
         tests.testRichListOffsets()
         tests.testHighlightRangesAndContainerFocus()
         tests.testBlankLinesAreNotCorrections()

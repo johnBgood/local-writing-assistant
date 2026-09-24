@@ -138,7 +138,7 @@
       if(await selectedText()!==selectedOriginal || run!==selectionGeneration) return;
       if(!result?.ok) throw Error(result?.error||'LocalWriter did not respond.');
       if(typeof result.rewrite!=='string' || !result.rewrite.trim()) throw Error('The model returned an empty suggestion.');
-      if(result.rewrite===original) {show('This selection already reads well.',anchor);return;}
+      if(result.rewrite===original) {show('No useful rewording found. Your text was left unchanged.',anchor);return;}
       show(result.rewrite,anchor,{...range,replacement:result.rewrite,baseText:before.text,selectionGeneration:run,selectedOriginal});
     } catch(e) {if(run===selectionGeneration) show(e.message,anchor);}
   }
