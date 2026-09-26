@@ -31,10 +31,10 @@ final class TextEditTests {
         XCTAssertEqual(HighlightRanges.words(in: NSRange(location: 5, length: 2), text: text), [])
         struct Node { let id: Int; var children: [Node] = []; var editor = false; var focused = false; var secure = false }
         func resolve(_ root: Node) -> Int? {
-            EditorSearch.resolve(root: root, children: { $0.children }, isEditor: { $0.editor }, isTextArea: { $0.editor }, isFocused: { $0.focused }, isSecure: { $0.secure })?.id
+            EditorSearch.resolve(root: root, children: { $0.children }, isEditor: { $0.editor }, isFocused: { $0.focused }, isSecure: { $0.secure })?.id
         }
         let composer = Node(id: 2, editor: true)
-        XCTAssertEqual(resolve(Node(id: 0, children: [Node(id: 1, children: [composer])])), 2)
+        XCTAssertNil(resolve(Node(id: 0, children: [Node(id: 1, children: [composer])])))
         XCTAssertNil(resolve(Node(id: 0, children: [composer, Node(id: 3, editor: true)])))
         XCTAssertEqual(resolve(Node(id: 0, children: [composer, Node(id: 3, editor: true, focused: true)])), 3)
         XCTAssertNil(resolve(Node(id: 0, children: [Node(id: 1, children: [composer], secure: true)])))
@@ -111,6 +111,13 @@ final class TextEditTests {
 @main struct CoreChecks {
     static func main() {
         let tests = TextEditTests()
+        precondition(!EditorEligibility.allows(role: "AXTextArea", editable: false, enabled: true, readOnly: nil, valueSettable: false), "Read-only AX text must not receive suggestions")
+        precondition(!EditorEligibility.allows(role: "AXTextField", editable: nil, enabled: true, readOnly: true, valueSettable: true))
+        precondition(!EditorEligibility.allows(role: "AXTextArea", editable: true, enabled: false, readOnly: nil, valueSettable: true))
+        precondition(!EditorEligibility.allows(role: "AXStaticText", editable: nil, enabled: true, readOnly: nil, valueSettable: false))
+        precondition(EditorEligibility.allows(role: "AXTextArea", editable: nil, enabled: true, readOnly: nil, valueSettable: true))
+        precondition(EditorEligibility.allows(role: "AXGroup", editable: true, enabled: nil, readOnly: nil, valueSettable: false))
+
         precondition(!RewriteComparison.hasWordingChange(from: "Bonjour !", to: "  bonjour."))
         precondition(!RewriteComparison.hasWordingChange(from: "Café", to: "Cafe\u{301}"))
         precondition(RewriteComparison.hasWordingChange(from: "I would like to ask for your help", to: "Could you help me?"))

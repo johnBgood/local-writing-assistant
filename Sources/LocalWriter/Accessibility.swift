@@ -26,7 +26,7 @@ final class AccessibilityBridge {
     }
 
     func practiceSnapshot() -> EditorSnapshot? {
-        guard let view = practiceEditor, let window = view.window, !view.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard let view = practiceEditor, view.isEditable, let window = view.window, !view.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return EditorSnapshot(element: AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier),
                               pid: ProcessInfo.processInfo.processIdentifier, text: view.string,
                               frame: window.convertToScreen(view.convert(view.visibleRect, to: nil)), nativeView: view)
@@ -69,6 +69,16 @@ final class AccessibilityBridge {
         }
         return lines.joined(separator: "\n")
     }
+    private func isEditable(_ element: AXUIElement) -> Bool {
+        guard attribute(element, kAXSubroleAttribute) as? String != kAXSecureTextFieldSubrole else { return false }
+        var settable = DarwinBoolean(false)
+        let status = AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable)
+        return EditorEligibility.allows(role: attribute(element, kAXRoleAttribute) as? String ?? "",
+            editable: attribute(element, "AXEditable") as? Bool,
+            enabled: attribute(element, kAXEnabledAttribute) as? Bool,
+            readOnly: attribute(element, "AXReadOnly") as? Bool,
+            valueSettable: status == .success && settable.boolValue)
+    }
     func snapshot(app target: NSRunningApplication? = nil) -> EditorSnapshot? {
         if target == nil, NSApp.isActive, let view = practiceEditor, view.window?.isKeyWindow == true {
             failure = view.string.isEmpty ? "Type in the practice editor" : ""
@@ -95,9 +105,7 @@ final class AccessibilityBridge {
             guard let element = candidate else { break }
             let subrole = attribute(element, kAXSubroleAttribute) as? String ?? ""
             if subrole == kAXSecureTextFieldSubrole { failure = "Password fields are excluded"; return nil }
-            let role = attribute(element, kAXRoleAttribute) as? String ?? ""
-            let editable = attribute(element, "AXEditable") as? Bool ?? false
-            if [kAXTextAreaRole, kAXTextFieldRole, "AXComboBox"].contains(role) || editable {
+            if isEditable(element) {
                 guard let text = attribute(element, kAXValueAttribute) as? String else {
                     failure = "Editor does not expose readable text"; return nil
                 }
@@ -117,8 +125,7 @@ final class AccessibilityBridge {
         if ["AXWebArea", "AXGroup"].contains(containerRole),
            let editor = EditorSearch.resolve(root: container,
                children: { self.attribute($0, kAXChildrenAttribute) as? [AXUIElement] ?? [] },
-               isEditor: { [kAXTextAreaRole, kAXTextFieldRole, "AXComboBox"].contains(self.attribute($0, kAXRoleAttribute) as? String ?? "") || (self.attribute($0, "AXEditable") as? Bool ?? false) },
-               isTextArea: { self.attribute($0, kAXRoleAttribute) as? String == kAXTextAreaRole },
+               isEditor: { self.isEditable($0) },
                isFocused: { self.attribute($0, kAXFocusedAttribute) as? Bool ?? false },
                isSecure: { self.attribute($0, kAXSubroleAttribute) as? String == kAXSecureTextFieldSubrole }),
            let text = attribute(editor, kAXValueAttribute) as? String,

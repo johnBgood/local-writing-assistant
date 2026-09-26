@@ -47,30 +47,25 @@ public enum HighlightRanges {
 }
 
 public enum EditorSearch {
-    /// A container can report focus instead of its editable child. Prefer explicit focus;
-    /// use a unique textarea only when the container offers no focused editable child.
+    /// Containers may report focus for the page; only accept an explicitly focused editor.
     public static func resolve<Node>(root: Node, children: (Node) -> [Node],
-                                     isEditor: (Node) -> Bool, isTextArea: (Node) -> Bool,
+                                     isEditor: (Node) -> Bool,
                                      isFocused: (Node) -> Bool, isSecure: (Node) -> Bool) -> Node? {
         var queue: [(Node, Int)] = [(root, 0)]
         var index = 0
-        var candidates: [Node] = []
         var focused: [Node] = []
-        var truncated = false
         while index < queue.count && index < 256 {
             let (node, depth) = queue[index]; index += 1
             if isSecure(node) { continue }
             if isEditor(node) {
                 if isFocused(node) { focused.append(node) }
-                if isTextArea(node) { candidates.append(node) }
                 continue
             }
             let descendants = children(node)
             let capacity = depth < 12 ? max(0, 256 - queue.count) : 0
-            if descendants.count > capacity { truncated = true }
             queue.append(contentsOf: descendants.prefix(capacity).map { ($0, depth + 1) })
         }
         if focused.count == 1 { return focused[0] }
-        return !truncated && focused.isEmpty && candidates.count == 1 ? candidates[0] : nil
+        return nil
     }
 }
